@@ -1,0 +1,8 @@
+node_modules/
+dist/
+samples/
+results/
+*.log
+.env*
+!.env.example
+__pycache__/

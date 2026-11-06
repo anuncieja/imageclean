@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Laboratório local de inspeção, privacidade e processamento de imagens.">
+  <title>ImageClean Lab — Inspecione. Compare. Verifique.</title>
+  <link rel="stylesheet" href="./style.css"><script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header><a class="brand" href="./" aria-label="ImageClean Lab início"><span class="brand-mark">iC</span> ImageClean<span class="muted">Lab</span></a><span class="version">EXPERIMENTAL · 0.1</span><span class="local"><i></i> Processamento no seu navegador</span></header>
+  <main>
+    <section class="intro"><p class="eyebrow">PRIVACIDADE COM EVIDÊNCIAS</p><h1>Veja o que sua<br>imagem carrega.</h1><p class="lede">Inspecione metadados, escolha o que remover e compare o resultado. Seus arquivos ficam neste dispositivo.</p><div class="features"><span>JPEG · PNG · WebP</span><span>Até 30 MiB · 24 MP</span><span>Sem cadastro</span></div></section>
+    <section class="workspace" aria-label="Laboratório de imagens">
+      <aside class="controls">
+        <div class="section-title"><span class="step">01</span><h2>Escolha uma imagem</h2></div>
+        <label class="dropzone" id="dropzone" for="file"><span class="upload-icon" aria-hidden="true">↑</span><strong>Arraste uma imagem aqui</strong><span>ou clique para selecionar</span><input id="file" type="file" accept="image/jpeg,image/png,image/webp"></label>
+        <button class="text-button" id="demo">Experimentar com imagem de teste <span aria-hidden="true">↗</span></button>
+        <div class="separator"></div>
+        <div class="section-title"><span class="step">02</span><h2>Configure o processamento</h2></div>
+        <div class="tabs" role="group" aria-label="Operação"><button class="tab active" id="tab-clean" aria-pressed="true">Limpar metadados</button><button class="tab" id="tab-convert" aria-pressed="false">Converter</button></div>
+        <div id="clean-options">
+          <p class="hint">Remove contêineres inteiros das categorias selecionadas, sem recodificar os dados da imagem.</p>
+          <label class="check"><input type="checkbox" value="EXIF" checked><span><strong>EXIF</strong><small>Câmera, datas, GPS; pode incluir autoria</small></span></label>
+          <label class="check"><input type="checkbox" value="XMP"><span><strong>XMP</strong><small>Pode conter autoria e procedência</small></span></label>
+          <label class="check"><input type="checkbox" value="IPTC/Photoshop"><span><strong>IPTC / Photoshop</strong><small>Informações editoriais e direitos</small></span></label>
+          <label class="check"><input type="checkbox" value="Comentários"><span><strong>Comentários JPEG</strong><small>Textos incorporados ao arquivo</small></span></label>
+          <label class="check"><input type="checkbox" value="Texto PNG"><span><strong>Textos PNG</strong><small>Descrições, software e outros textos</small></span></label>
+          <label class="ack" id="ack-row" hidden><input type="checkbox" id="ack">Revisei a remoção de possíveis informações autorais e de procedência dessas categorias.</label>
+        </div>
+        <div id="convert-options" hidden>
+          <p class="hint">Gera uma nova imagem. A conversão pode alterar cores, qualidade e metadados. A orientação é aplicada pelo decodificador do navegador.</p>
+          <label class="field">Formato<select id="format"><option value="image/webp">WebP</option><option value="image/jpeg">JPEG · fundo branco</option><option value="image/png">PNG</option></select></label>
+          <label class="field">Lado maior máximo<input id="max-side" type="number" value="1920" min="64" max="6000" step="1"></label>
+          <label class="field">Qualidade <span id="quality-label">90%</span><input id="quality" type="range" min="50" max="100" value="90"></label>
+        </div>
+        <button class="primary" id="process" disabled>Processar imagem <span aria-hidden="true">→</span></button>
+        <p class="privacy-note">Nada é enviado. Histórico apenas nesta aba, sem persistência após fechá-la.</p>
+      </aside>
+      <div class="results">
+        <div class="result-heading"><div><p class="eyebrow">INSPEÇÃO DO ARQUIVO</p><h2 id="filename">Seu próximo experimento</h2></div><span class="badge" id="status-badge">Aguardando imagem</span></div>
+        <p id="status" class="status" role="status" aria-live="polite">Selecione uma imagem ou use o arquivo de teste para começar.</p>
+        <div class="preview-grid">
+          <figure><figcaption>ORIGINAL <span id="before-size">—</span></figcaption><div class="image-stage" id="original-stage"><img id="original" alt="Imagem original selecionada" hidden><span class="empty" id="empty-original">Uma imagem.<br>Mais transparência.</span></div></figure>
+          <figure><figcaption>RESULTADO <span id="after-size">—</span></figcaption><div class="image-stage"><img id="output" alt="Resultado do processamento" hidden><span class="empty" id="empty-output">Seu resultado<br>aparecerá aqui.</span></div></figure>
+        </div>
+        <div class="stats"><div><span>FORMATO</span><strong id="stat-format">—</strong></div><div><span>DIMENSÕES</span><strong id="stat-dimensions">—</strong></div><div><span>CONTÊINERES DE METADADOS</span><strong id="stat-metadata">—</strong></div></div>
+        <section class="metadata-section"><div class="table-heading"><h3>O que encontramos</h3><span>Inspeção estrutural limitada</span></div><div id="metadata" class="metadata-empty">Os contêineres reconhecidos serão listados aqui.</div></section>
+        <div class="signal-grid"><article><h3>C2PA / procedência</h3><p id="c2pa">Não verificado.</p><small>Esta versão não valida assinaturas. Bloqueia alterações quando encontra contêineres de procedência reconhecidos ou possíveis.</small></article><article><h3>SynthID</h3><p>Não verificado</p><small>Nenhum detector integrado. Limpeza de metadados não comprova remoção de marcas invisíveis.</small></article></div>
+        <div id="summary" class="summary" hidden></div>
+        <div class="downloads"><button id="download-image" class="secondary" disabled>↓ Baixar imagem</button><button id="download-report" class="secondary" disabled>↓ Relatório JSON</button></div>
+      </div>
+    </section>
+    <section class="notes"><span class="note-number">i</span><p><strong>Resultados observados, sem promessas de invisibilidade.</strong> Este laboratório não certifica ausência de IA e não garante publicação sem rótulos. Análise de metadados, marcas invisíveis e decisões das plataformas são coisas diferentes.</p></section>
+    <section class="history"><div class="table-heading"><h2>Experimentos desta sessão</h2><button id="clear" class="text-button">Limpar histórico</button></div><div id="history-list" class="history-empty">Os processamentos concluídos aparecerão aqui.</div></section>
+  </main><footer><span>ImageClean Lab · pesquisa aplicada a imagens</span><span>Local por padrão. Verificável por projeto.</span></footer>
+</body></html>
