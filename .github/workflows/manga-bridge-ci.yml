@@ -1,0 +1,47 @@
+name: Manga Bridge isolated checks
+on:
+  push:
+    branches: [manga-bridge-2, manga-bridge-2-transport]
+    paths: ['manga-bridge-2/**', '.github/workflows/manga-bridge-*.yml']
+  pull_request:
+    branches: [manga-bridge-2]
+    paths: ['manga-bridge-2/**', '.github/workflows/manga-bridge-*.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mbi2-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  isolated:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mysqli, mbstring, openssl
+          coverage: none
+      - name: Syntax and contract tests
+        env:
+          MBI2_VECTOR_OUTPUT: /tmp/mbi2-public-test-vector.json
+        run: |
+          set -eu
+          find manga-bridge-2/control -name '*.php' -print0 | xargs -0 -n1 php -l
+          python -m compileall -q manga-bridge-2/engine manga-bridge-2/scripts
+          php manga-bridge-2/tests/php-tests.php
+          python -m unittest discover -s manga-bridge-2/tests -p 'test_*.py' -v
+      - name: Package isolated staging extension
+        run: python manga-bridge-2/scripts/package.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manga-bridge-control-staging
+          path: manga-bridge-2/dist/
+          retention-days: 3
+          if-no-files-found: error
