@@ -1,0 +1,35 @@
+name: Manga Bridge 2.0 - Engine validation (no production)
+on:
+  push:
+    branches: [manga-bridge-2]
+    paths:
+      - 'manga-bridge-2/**'
+      - '.github/workflows/manga-bridge-2-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: manga-bridge-2-ci
+  cancel-in-progress: true
+jobs:
+  engine-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: manga-bridge-2/engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Unit tests (no network or WP calls)
+        run: npm test
+      - name: Dry-run manifest validation
+        run: npm run demo
+      - name: Archive dry-run report
+        uses: actions/upload-artifact@v4
+        with:
+          name: manga-bridge-2-validation-report
+          path: manga-bridge-2/engine/out/demo-report.json
+          retention-days: 7

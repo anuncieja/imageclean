@@ -20,3 +20,5 @@ Não concluído:
 - Alterações no Cloudflare Worker: nenhum código implantado ou configuração foi obtido nesta fase.
 
 O ambiente local de terminal está indisponível nesta sessão. Resultados só serão marcados como aprovados após execução observável no GitHub Actions; fixtures não são medições de produção.
+
+A extensão de transporte em Python/PHP complementa o validador de manifestos Node já adicionado à branch; os arquivos do validador são preservados. A CI executa as duas suítes. O teste WordPress/MariaDB usa somente registros sintéticos em banco descartável. A conclusão de cada execução deve ser consultada no Actions.

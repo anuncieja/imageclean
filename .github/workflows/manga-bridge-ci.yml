@@ -16,6 +16,16 @@ jobs:
   isolated:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: mbi2_ci
+          MARIADB_ROOT_PASSWORD: mbi2-disposable-ci-only
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,10 +43,20 @@ jobs:
           MBI2_VECTOR_OUTPUT: /tmp/mbi2-public-test-vector.json
         run: |
           set -eu
-          find manga-bridge-2/control -name '*.php' -print0 | xargs -0 -n1 php -l
+          find manga-bridge-2 -name '*.php' -print0 | xargs -0 -n1 php -l
           python -m compileall -q manga-bridge-2/engine manga-bridge-2/scripts
           php manga-bridge-2/tests/php-tests.php
           python -m unittest discover -s manga-bridge-2/tests -p 'test_*.py' -v
+      - name: WordPress and MariaDB transport and preservation
+        env:
+          MBI2_CI_DB_PASSWORD: mbi2-disposable-ci-only
+        run: bash manga-bridge-2/scripts/wp-smoke.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Preserve and test existing manifest engine
+        working-directory: manga-bridge-2/engine
+        run: npm test
       - name: Package isolated staging extension
         run: python manga-bridge-2/scripts/package.py
       - uses: actions/upload-artifact@v4
