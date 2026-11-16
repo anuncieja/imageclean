@@ -15,10 +15,12 @@ Não concluído:
 - Comparação com o downgrade 1.7.41 e investigação dos ~50 registros ausentes: requer inventário e backup privados, somente leitura.
 - Adaptação da publicação integral ao código real do Importer. Nenhuma publicação é habilitada nesta extensão.
 - Integração dos pedidos por quantidade e da confirmação manual de novos capítulos ao Importer existente.
-- Teste em WordPress/MariaDB real, instalação, atualização/rollback do Importer e medições de carga antes/depois.
+- Instalação, atualização/rollback do Importer legado e medições de carga antes/depois. A extensão complementar já passou em WordPress/MariaDB descartáveis; isso não valida a v1.7.52.
 - Validação do workflow_dispatch nesta branch. O GitHub documenta restrições de registro de workflows na branch padrão. Não alterar main para contornar isso sem autorização.
 - Alterações no Cloudflare Worker: nenhum código implantado ou configuração foi obtido nesta fase.
 
 O ambiente local de terminal está indisponível nesta sessão. Resultados só serão marcados como aprovados após execução observável no GitHub Actions; fixtures não são medições de produção.
 
 A extensão de transporte em Python/PHP complementa o validador de manifestos Node já adicionado à branch; os arquivos do validador são preservados. A CI executa as duas suítes. O teste WordPress/MariaDB usa somente registros sintéticos em banco descartável. A conclusão de cada execução deve ser consultada no Actions.
+
+Resultados observados e limitações estão em TECHNICAL-REPORT.md. A execução 43958992148 aprovou a comunicação HTTP em WordPress/PHP 8.4/MariaDB descartáveis; a integração de publicação legada e o despacho real contra staging externo continuam pendentes.
