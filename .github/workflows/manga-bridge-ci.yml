@@ -10,7 +10,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: mbi2-ci-${{ github.ref }}
+  group: mbi2-ci-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 jobs:
   isolated:

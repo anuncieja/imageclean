@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Disposable GitHub runner only. No production endpoint or production credentials.
 set -euo pipefail
-task_project_dir="$(pwd)"
+export MBI2_CI_PROJECT_DIR
+MBI2_CI_PROJECT_DIR="$(pwd)"
 task_wp_dir="$(mktemp -d /tmp/mbi2-wp.XXXXXX)"
 task_cli="/tmp/mbi2-wp-cli.phar"
 curl --fail --silent --show-error --location https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar --output "$task_cli"
@@ -20,7 +21,7 @@ wpci core install --url=http://127.0.0.1:8085 --title="Disposable Manga Bridge C
 mkdir -p "$task_wp_dir/wp-content/plugins"
 cp -R manga-bridge-2/control/manga-bridge-control "$task_wp_dir/wp-content/plugins/"
 wpci option update permalink_structure '/%postname%/'
-wpci eval-file "$task_project_dir/manga-bridge-2/tests/wp-integration.php"
+wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-integration.php";'
 php -S 127.0.0.1:8085 -t "$task_wp_dir" "$task_wp_dir/index.php" > /tmp/mbi2-loopback-server.log 2>&1 &
 task_server_pid=$!
 trap 'kill "$task_server_pid" 2>/dev/null || true' EXIT
@@ -37,8 +38,8 @@ else:
     raise RuntimeError("Loopback server unavailable")
 PY
 python manga-bridge-2/tests/http_smoke.py
-wpci eval-file "$task_project_dir/manga-bridge-2/tests/wp-preservation.php"
+wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-preservation.php";'
 wpci plugin deactivate manga-bridge-control
-wpci eval-file "$task_project_dir/manga-bridge-2/tests/wp-preservation.php"
+wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-preservation.php";'
 wpci plugin activate manga-bridge-control
-wpci eval-file "$task_project_dir/manga-bridge-2/tests/wp-preservation.php"
+wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-preservation.php";'
