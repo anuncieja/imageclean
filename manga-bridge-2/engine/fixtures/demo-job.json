@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "jobId": "example-001",
+  "manga": {
+    "title": "Obra de teste fictícia",
+    "sourceUrl": "https://example.org/manga/obra-teste",
+    "expectedChapters": 2,
+    "chapters": [
+      {"number": "1", "sourceUrl": "https://example.org/manga/obra-teste/cap-1", "images": ["https://example.org/images/c1-p1.webp", "https://example.org/images/c1-p2.webp"]},
+      {"number": "2", "sourceUrl": "https://example.org/manga/obra-teste/cap-2", "images": ["https://example.org/images/c2-p1.webp"]}
+    ]
+  }
+}
