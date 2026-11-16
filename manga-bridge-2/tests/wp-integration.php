@@ -10,11 +10,10 @@ if (wp_get_environment_type() !== 'staging' || !defined('WP_CLI') || !WP_CLI) {
     throw new RuntimeException('Disposable CLI staging only.');
 }
 require_once ABSPATH . 'wp-admin/includes/plugin.php';
-$checks = 0;
+$GLOBALS['mbi2_ci_checks'] = 0;
 function ensure(bool $condition, string $name): void {
-    global $checks;
     if (!$condition) { throw new RuntimeException($name); }
-    $checks++;
+    $GLOBALS['mbi2_ci_checks']++;
 }
 function catalogue_digest(): string {
     global $wpdb;
@@ -92,5 +91,6 @@ ensure(catalogue_digest() === $before, 'jobs REST recovery cancel resume preserv
 $httpId = wp_generate_uuid4();
 ensure(Store::create(Job::create($httpId, wp_generate_uuid4(), 'https://mangalivre.blog/manga/http-fixture/', Plugin::hosts(), time())), 'loopback communication fixture created');
 file_put_contents('/tmp/mbi2-http-job-id', $httpId);
-echo "WordPress/MariaDB integration checks: $checks\n";
+ensure($GLOBALS['mbi2_ci_checks'] > 20, 'integration assertions actually executed');
+echo "WordPress/MariaDB integration checks: " . $GLOBALS['mbi2_ci_checks'] . "\n";
 echo 'Environment: WordPress ' . get_bloginfo('version') . '; PHP ' . PHP_VERSION . '; MariaDB ' . $GLOBALS['wpdb']->db_version() . "\n";

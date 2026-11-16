@@ -18,8 +18,7 @@ define('DISABLE_WP_CRON', true);
 PHP
 task_admin_password="$(php -r 'echo bin2hex(random_bytes(24));')"
 wpci core install --url=http://127.0.0.1:8085 --title="Disposable Manga Bridge CI" --admin_user=mbi2_ci --admin_password="$task_admin_password" --admin_email=ci@example.org --skip-email
-mkdir -p "$task_wp_dir/wp-content/plugins"
-cp -R manga-bridge-2/control/manga-bridge-control "$task_wp_dir/wp-content/plugins/"
+wpci plugin install "$MBI2_CI_PROJECT_DIR/manga-bridge-2/dist/manga-bridge-control-0.1.0-staging.zip"
 wpci option update permalink_structure '/%postname%/'
 wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-integration.php";'
 php -S 127.0.0.1:8085 -t "$task_wp_dir" "$task_wp_dir/index.php" > /tmp/mbi2-loopback-server.log 2>&1 &

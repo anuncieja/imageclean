@@ -281,6 +281,6 @@ def collect_work(url, http, checkpoint=None, progress=None):
             raise Blocked("chapter_count_mismatch")
         state["complete"] = True
         return state
-    except Yield:
+    except (Yield, TimeoutError, ConnectionError, OSError):
         save(True)
         raise

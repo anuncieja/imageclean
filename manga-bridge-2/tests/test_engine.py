@@ -78,6 +78,29 @@ class EngineTests(unittest.TestCase):
         again = FakeHTTP({BASE: root().encode()})
         self.assertTrue(collect_work(BASE, again, result)["complete"])
         self.assertEqual(len(again.calls), 1)
+    def test_dynamic_inventory_completes_with_fresh_nonce(self):
+        endpoint = "https://mangalivre.blog/wp-json/slimeread/v1/chapters/12?offset=1&search="
+        image = "https://mangalivre.blog/wp-content/uploads/shared.png"
+        http = FakeHTTP({BASE: root(partial=True, nonce="fresh").encode(), COVER: PNG,
+            endpoint: json.dumps({"offset": 2, "total": 2, "list": '<a class="chapter-link" href="/capitulo/demo-2/">2</a>'}).encode(),
+            C1: ('<div class="reading-content"><img src="' + image + '"></div>').encode(),
+            C2: ('<div class="reading-content"><img src="' + image + '"></div>').encode(), image: PNG})
+        result = collect_work(BASE, http)
+        self.assertTrue(result["complete"])
+        self.assertIn((endpoint, False, "fresh"), http.calls)
+        self.assertEqual(sum(c[0] == image for c in http.calls), 1)
+    def test_temporary_failure_retains_validated_images(self):
+        image = "https://mangalivre.blog/wp-content/uploads/resumable.png"
+        chapter = ('<div class="reading-content"><img src="' + image + '"></div>').encode()
+        first = FakeHTTP({BASE: root().encode(), COVER: PNG, C1: chapter, image: PNG, C2: TimeoutError()})
+        saved = []
+        with self.assertRaises(TimeoutError):
+            collect_work(BASE, first, progress=lambda state: saved.append(json.loads(json.dumps(state))))
+        self.assertEqual(len(saved[-1]["chapters"]), 1)
+        resumed = FakeHTTP({BASE: root().encode(), C2: chapter})
+        result = collect_work(BASE, resumed, saved[-1])
+        self.assertTrue(result["complete"])
+        self.assertEqual([c[0] for c in resumed.calls], [BASE, C2])
     def test_header_dimensions(self):
         self.assertEqual(image_dimensions(PNG), (900, 1300))
         with self.assertRaises(Blocked):

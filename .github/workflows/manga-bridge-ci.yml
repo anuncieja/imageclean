@@ -47,6 +47,8 @@ jobs:
           python -m compileall -q manga-bridge-2/engine manga-bridge-2/scripts
           php manga-bridge-2/tests/php-tests.php
           python -m unittest discover -s manga-bridge-2/tests -p 'test_*.py' -v
+      - name: Package isolated staging extension
+        run: python manga-bridge-2/scripts/package.py
       - name: WordPress and MariaDB transport and preservation
         env:
           MBI2_CI_DB_PASSWORD: mbi2-disposable-ci-only
@@ -57,8 +59,6 @@ jobs:
       - name: Preserve and test existing manifest engine
         working-directory: manga-bridge-2/engine
         run: npm test
-      - name: Package isolated staging extension
-        run: python manga-bridge-2/scripts/package.py
       - uses: actions/upload-artifact@v4
         with:
           name: manga-bridge-control-staging
