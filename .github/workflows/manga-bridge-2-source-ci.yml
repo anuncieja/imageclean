@@ -1,0 +1,54 @@
+name: Manga Bridge 2.0 - Extrator de origem (seguro)
+on:
+  push:
+    branches: [manga-bridge-2]
+    paths:
+      - 'manga-bridge-2/extractor/**'
+      - '.github/workflows/manga-bridge-2-source-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mb2-extractor-ci
+  cancel-in-progress: true
+jobs:
+  extractor-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Testes com HTML simulado (sem rede)
+        run: python -m unittest discover -s extractor/test -v
+        working-directory: manga-bridge-2
+      - name: Validar sintaxe
+        run: python -m compileall -q extractor
+        working-directory: manga-bridge-2
+
+  # One explicitly requested source-only smoke check. NEVER requests the WP site or image Worker.
+  # This job is disabled on ordinary commits and does no downloads of chapter images.
+  source-probe-once:
+    if: contains(github.event.head_commit.message, '[source-probe]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: One GET of a public manga listing; do not publish
+        working-directory: manga-bridge-2
+        shell: bash
+        run: |
+          set +e
+          python -m extractor.cli \
+            --live \
+            --allow-host mangalivre.blog \
+            --url https://mangalivre.blog/manga/ao-no-hako/ \
+            --max-requests 1 --max-pages 1 --sample-chapters 0 --timeout 7 \
+            --report /tmp/mb2-probe.json
+          rc=$?
+          echo "Diagnostic exit code (0=complete, 3=partial/unavailable, 2=invalid invocation): $rc"
+          test "$rc" -eq 0 -o "$rc" -eq 3
