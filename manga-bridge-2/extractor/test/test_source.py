@@ -174,6 +174,7 @@ class ExtractorTests(unittest.TestCase):
         alt = "https://example.org/manga/outro/capitulo-1/"
         self.assertFalse(is_chapter_url(alt, ROOT))
         self.assertTrue(is_chapter_url("https://example.org/manga/demo/capitulo-1/", ROOT))
+        self.assertFalse(is_chapter_url("https://bad.org/capitulo/demo-capitulo-1/", ROOT))
         self.assertEqual(chapter_number("Capítulo 120.5", CAP1), "120.5")
 
 

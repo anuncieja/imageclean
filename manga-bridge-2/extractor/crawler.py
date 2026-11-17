@@ -219,6 +219,12 @@ class InventoryCrawler:
                     save_state(self.checkpoint, state)
         declared = state.declared_counts[0] if len(state.declared_counts) == 1 else None
         count = len(state.chapters)
+        number_counts = {}
+        for chapter in state.chapters:
+            if chapter["number"] is not None:
+                number_counts[chapter["number"]] = number_counts.get(chapter["number"], 0) + 1
+        duplicate_numbers = sorted([num for num, tally in number_counts.items() if tally > 1])
+        unknown_numbers = sum(1 for chapter in state.chapters if chapter["number"] is None)
         if len(state.declared_counts) > 1:
             status = "blocked_conflicting_counts"
         elif status != "source_unavailable":
@@ -250,6 +256,9 @@ class InventoryCrawler:
             "pendingPageCount": len(state.queue),
             "sampledChapterPages": state.chapter_sample,
             "dynamicLoaderSeen": state.dynamic_loader,
+            "unknownChapterNumbers": unknown_numbers,
+            "duplicateChapterNumbers": len(duplicate_numbers),
+            "duplicateNumberSamples": duplicate_numbers[:5],
             "status": status,
             "issues": state.issues,
             "allowPublish": False,

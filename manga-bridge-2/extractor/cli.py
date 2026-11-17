@@ -43,7 +43,8 @@ def main(argv=None):
     # Log only aggregate diagnostics. No chapters, image URLs or secrets in CI logs.
     print(json.dumps({k: result[k] for k in (
         "status", "declaredChapterCount", "discoveredChapterCount",
-        "pagesFetched", "pendingPageCount", "dynamicLoaderSeen", "allowPublish"
+        "pagesFetched", "pendingPageCount", "dynamicLoaderSeen",
+        "unknownChapterNumbers", "duplicateChapterNumbers", "duplicateNumberSamples", "allowPublish"
     )}, ensure_ascii=False))
     return 0 if result["status"] == "inventory_complete" else 3
 

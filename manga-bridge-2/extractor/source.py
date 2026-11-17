@@ -46,6 +46,8 @@ def safe_url(value: str, base: str = "", host: str = "") -> Optional[str]:
 
 def is_chapter_url(url: str, manga_url: str) -> bool:
     try:
+        if urlsplit(url).scheme != "https" or urlsplit(url).hostname != urlsplit(manga_url).hostname:
+            return False
         path = urlsplit(url).path
         root = MANGA_PATH.match(urlsplit(manga_url).path)
         if CHAPTER_PATH.fullmatch(path):
@@ -57,6 +59,8 @@ def is_chapter_url(url: str, manga_url: str) -> bool:
 
 def is_pagination_url(url: str, manga_url: str) -> bool:
     """A page must identify the same manga, never a guessed page or external API."""
+    if urlsplit(url).scheme != "https" or urlsplit(url).hostname != urlsplit(manga_url).hostname:
+        return False
     path = urlsplit(url).path.rstrip("/")
     root = urlsplit(manga_url).path.rstrip("/")
     if PAGE_PATH.fullmatch(path):
