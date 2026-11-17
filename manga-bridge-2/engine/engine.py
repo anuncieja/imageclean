@@ -10,7 +10,14 @@ import ssl
 import struct
 import time
 import urllib.parse
+import sys
+from pathlib import Path
 from html.parser import HTMLParser
+
+# Use the same chapter-list parser that passed the phase-2 source tests.
+# This process only reads source HTML; publishing is not implemented here.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from extractor.source import parse_html
 
 PROXY_HOST = "img.lermangaonline.com.br"
 
@@ -25,6 +32,7 @@ class Document(HTMLParser):
     def __init__(self, text):
         super().__init__(convert_charrefs=True)
         self.nodes, self.stack = [], []
+        self.raw = text
         self.feed(text)
     def handle_starttag(self, tag, attrs):
         node = {"tag": tag, "attrs": dict(attrs), "parents": self.stack[:], "text": ""}
@@ -84,7 +92,10 @@ def chapter_links(doc, base):
         value = source_link(base, n["attrs"]["href"], "capitulo")
         if value not in urls:
             urls.append(value)
-    return urls
+    shared = [item["url"] for item in parse_html(doc.raw, base, base).chapter_links]
+    if urls != shared:
+        raise Blocked("chapter_parser_disagreement")
+    return shared
 
 def root_data(text, base):
     doc = Document(text)
@@ -174,13 +185,18 @@ def image_dimensions(data):
     raise Blocked("unsupported_or_invalid_image_header")
 
 class SafeHTTP:
-    def __init__(self, source_hosts, media_hosts, max_requests=300, seconds=420, heartbeat=None):
+    def __init__(self, source_hosts, media_hosts, max_requests=300, seconds=420, heartbeat=None, min_gap=0.15):
+        if (not isinstance(max_requests, int) or not 0 <= max_requests <= 300 or
+                not 30 <= seconds <= 480 or not 0 <= min_gap <= 2):
+            raise ValueError("invalid_network_budget")
         self.source_hosts, self.media_hosts = set(source_hosts), set(media_hosts)
         self.requests = 0
         self.max_requests = max_requests
         self.deadline = time.monotonic() + seconds
         self.heartbeat = heartbeat
         self.last_heartbeat = time.monotonic()
+        self.min_gap = min_gap
+        self.last_request = 0.0
     def get(self, url, image=False, nonce=""):
         p = urllib.parse.urlsplit(url)
         allowed = self.media_hosts if image else self.source_hosts
@@ -195,6 +211,14 @@ class SafeHTTP:
         addresses = list(dict.fromkeys(item[4][0] for item in answers))
         if not addresses or any(not ipaddress.ip_address(ip).is_global for ip in addresses):
             raise Blocked("non_public_address")
+        # Gentle pacing; never increase concurrency to compensate for slow origins.
+        if self.last_request:
+            delay = self.min_gap - (time.monotonic() - self.last_request)
+            if delay > 0:
+                if time.monotonic() + delay + 12 >= self.deadline:
+                    raise Yield("request_or_time_budget")
+                time.sleep(delay)
+        self.last_request = time.monotonic()
         self.requests += 1
         conn = http.client.HTTPSConnection(p.hostname, timeout=10, context=ssl.create_default_context())
         # Pin the checked address while preserving SNI/certificate hostname verification.

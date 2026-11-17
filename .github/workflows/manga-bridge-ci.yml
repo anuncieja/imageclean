@@ -44,7 +44,8 @@ jobs:
         run: |
           set -eu
           find manga-bridge-2 -name '*.php' -print0 | xargs -0 -n1 php -l
-          python -m compileall -q manga-bridge-2/engine manga-bridge-2/scripts
+          python -m compileall -q manga-bridge-2/engine manga-bridge-2/scripts manga-bridge-2/extractor
+          PYTHONPATH=manga-bridge-2 python -m unittest discover -s manga-bridge-2/extractor/test -v
           php manga-bridge-2/tests/php-tests.php
           python -m unittest discover -s manga-bridge-2/tests -p 'test_*.py' -v
       - name: Package isolated staging extension

@@ -41,6 +41,35 @@ class FakeHTTP:
         return value
 
 class EngineTests(unittest.TestCase):
+    def test_phase2_parser_compatibility_for_254_chapters(self):
+        from extractor.source import parse_html
+        parts = [
+            '<li><a class="chapter-link" href="/capitulo/demo-capitulo-' + str(n) +
+            '/">Capítulo ' + str(n) + '</a></li>' for n in range(1, 255)
+        ]
+        document = '<ul class="chapters-list">' + ''.join(parts) + '</ul>'
+        legacy_links = chapter_links(Document(document), BASE)
+        canonical = parse_html(document, BASE, BASE)
+        self.assertEqual(len(legacy_links), 254)
+        self.assertEqual(legacy_links, [c["url"] for c in canonical.chapter_links])
+        self.assertEqual(len({c["number"] for c in canonical.chapter_links}), 254)
+
+    def test_fractional_number_parser_alignment(self):
+        from extractor.source import parse_html
+        document = ('<ul class="chapters-list">'
+                    '<li><a href="/capitulo/demo-capitulo-23/">Capítulo 23: Capítulo 23</a></li>'
+                    '<li><a href="/capitulo/demo-capitulo-23-2/">Capítulo 23: Capítulo 23.2</a></li>'
+                    '<li><a href="/capitulo/demo-capitulo-23-5/">Capítulo 23: Capítulo 23.5</a></li>'
+                    '</ul>')
+        self.assertEqual(len(chapter_links(Document(document), BASE)), 3)
+        chapters = parse_html(document, BASE, BASE).chapter_links
+        self.assertEqual([c["number"] for c in chapters], ["23", "23.2", "23.5"])
+
+    def test_extraction_budget_cannot_be_raised_beyond_cap(self):
+        for kwargs in ({"max_requests": 301}, {"seconds": 481}, {"min_gap": -1}):
+            with self.assertRaisesRegex(ValueError, "invalid_network_budget"):
+                SafeHTTP({"mangalivre.blog"}, set(), **kwargs)
+
     def test_root_and_inventory(self):
         data = root_data(root(), BASE)
         self.assertEqual(data["chapter_urls"], [C1, C2])
