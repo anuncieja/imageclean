@@ -41,10 +41,12 @@ def main(argv=None):
         json.dump(result, fp, ensure_ascii=False, indent=2)
         fp.write("\n")
     # Log only aggregate diagnostics. No chapters, image URLs or secrets in CI logs.
+    result["sampledImageCounts"] = [item["image_count"] for item in result["sampledChapterPages"]]
     print(json.dumps({k: result[k] for k in (
         "status", "declaredChapterCount", "discoveredChapterCount",
         "pagesFetched", "pendingPageCount", "dynamicLoaderSeen",
-        "unknownChapterNumbers", "duplicateChapterNumbers", "duplicateNumberSamples", "allowPublish"
+        "unknownChapterNumbers", "duplicateChapterNumbers", "duplicateNumberSamples",
+        "sampledImageCounts", "allowPublish"
     )}, ensure_ascii=False))
     return 0 if result["status"] == "inventory_complete" else 3
 

@@ -244,6 +244,12 @@ class InventoryCrawler:
                 status = "inventory_complete"
         if count >= self.max_chapters and (not declared or count < declared):
             status = "blocked_chapter_limit"
+        # A sampled chapter with missing/invalid images is an explicit block,
+        # never a reason to treat the entire manga as ready for publication.
+        if any(item["image_count"] == 0 for item in state.chapter_sample) or any(
+            issue.startswith("SAMPLE_") for issue in state.issues
+        ):
+            status = "blocked_image_sample"
         return {
             "schemaVersion": 1,
             "stage": "read_only_source_inventory",

@@ -47,7 +47,7 @@ jobs:
             --live \
             --allow-host mangalivre.blog \
             --url https://mangalivre.blog/manga/ao-no-hako/ \
-            --max-requests 1 --max-pages 1 --sample-chapters 0 --timeout 7 \
+            --max-requests 2 --max-pages 1 --sample-chapters 1 --timeout 7 \
             --report /tmp/mb2-probe.json
           rc=$?
           echo "Diagnostic exit code (0=complete, 3=partial/unavailable, 2=invalid invocation): $rc"

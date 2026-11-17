@@ -176,6 +176,18 @@ class ExtractorTests(unittest.TestCase):
         self.assertEqual(f.calls, [ROOT, CAP1])
         self.assertFalse(r["allowPublish"])
 
+    def test_empty_images_in_sample_blocks_inventory(self):
+        f = FakeFetcher({ROOT: html([("1", CAP1)], 1), CAP1: "<div>Sem imagens</div>"})
+        r = InventoryCrawler(f).crawl(ROOT, sample_chapters=1)
+        self.assertEqual(r["status"], "blocked_image_sample")
+        self.assertFalse(r["allowPublish"])
+
+    def test_failed_sample_does_not_restart_catalog(self):
+        f = FakeFetcher({ROOT: html([("1", CAP1)], 1)})
+        r = InventoryCrawler(f).crawl(ROOT, sample_chapters=1)
+        self.assertEqual(r["status"], "blocked_image_sample")
+        self.assertEqual(f.calls, [ROOT, CAP1])
+
     def test_network_safety_limits(self):
         with self.assertRaises(ValueError):
             BoundedFetcher("localhost")
