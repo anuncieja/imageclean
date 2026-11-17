@@ -36,7 +36,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: mysqli, mbstring, openssl
+          extensions: mysqli, mbstring, dom, openssl
           coverage: none
       - name: Syntax and contract tests
         env:

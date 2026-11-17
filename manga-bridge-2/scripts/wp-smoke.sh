@@ -42,3 +42,17 @@ wpci plugin deactivate manga-bridge-control
 wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-preservation.php";'
 wpci plugin activate manga-bridge-control
 wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-preservation.php";'
+
+# This section executes only on the combined release branch. It installs both
+# plugins into the disposable CI instance, not into the user's production WP.
+if [[ -f "$MBI2_CI_PROJECT_DIR/manga-bridge-2/release53/tests/package.py" ]]; then
+  python "$MBI2_CI_PROJECT_DIR/manga-bridge-2/release53/tests/package.py"
+  wpci plugin install "$MBI2_CI_PROJECT_DIR/manga-bridge-2/release53/dist/manga-bridge-importer-v1.7.53.zip" --activate
+  wpci eval 'if (MBI_VERSION !== "1.7.53" || !function_exists("mbi") || !class_exists("MangaBridge2\Plugin") || !MangaBridge2\Plugin::enabled()) { throw new RuntimeException("Combined plugins failed to initialize."); } echo "Combined staging: both plugin modules initialized successfully.\n";'
+  wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-preservation.php";'
+  wpci plugin deactivate manga-bridge-importer
+  wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-preservation.php";'
+  wpci plugin activate manga-bridge-importer
+  wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-preservation.php";'
+  echo "Combined staging: no catalogue record changed after installing and cycling v1.7.53 alongside control."
+fi
