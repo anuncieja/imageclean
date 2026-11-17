@@ -1,0 +1,78 @@
+name: Manga Bridge - benchmark 10 synthetic mangas by chapter count
+on:
+  push:
+    branches: [manga-bridge-benchmark]
+    paths:
+      - 'manga-bridge-2/benchmarks/**'
+      - '.github/workflows/manga-bridge-benchmark.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mbi-10-synthetic-benchmark
+  cancel-in-progress: false
+jobs:
+  wordpress-benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: mbi_benchmark_ci
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 'yes'
+        ports: ['127.0.0.1:3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mysqli, mbstring, dom, openssl
+          coverage: none
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install synthetic, isolated WordPress + plugin 1.7.53
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/mb2bench /tmp/mb2bench-wp
+          curl --fail --silent --show-error --location https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /tmp/mb2bench-wpcli.phar
+          php /tmp/mb2bench-wpcli.phar --allow-root --path=/tmp/mb2bench-wp core download --version=latest --skip-content
+          php /tmp/mb2bench-wpcli.phar --allow-root --path=/tmp/mb2bench-wp config create --dbname=mbi_benchmark_ci --dbuser=root --dbpass='' --dbhost=127.0.0.1 --extra-php <<'PHP'
+          define('WP_ENVIRONMENT_TYPE','staging');
+          define('MBI_BENCHMARK_CI',true);
+          define('DISABLE_WP_CRON',true);
+          PHP
+          admin_password="$(php -r 'echo bin2hex(random_bytes(24));')"
+          php /tmp/mb2bench-wpcli.phar --allow-root --path=/tmp/mb2bench-wp core install --url=http://localhost:8901 --title="Benchmark disposable" --admin_user=bench --admin_password="$admin_password" --admin_email=bench@example.org --skip-email
+          python manga-bridge-2/release53/tests/package.py
+          php /tmp/mb2bench-wpcli.phar --allow-root --path=/tmp/mb2bench-wp plugin install "$GITHUB_WORKSPACE/manga-bridge-2/release53/dist/manga-bridge-importer-v1.7.53.zip" --activate
+      - name: Measure 10 mangas - poucos (10 chapters each)
+        env:
+          MBI_BENCH_SCENARIO: poucos
+          MBI_BENCH_OUT: /tmp/mb2bench/poucos.json
+        run: php -d memory_limit=512M /tmp/mb2bench-wpcli.phar --allow-root --path=/tmp/mb2bench-wp eval-file manga-bridge-2/benchmarks/wordpress_publish.php
+      - name: Measure 10 mangas - medios (50 chapters each)
+        env:
+          MBI_BENCH_SCENARIO: medios
+          MBI_BENCH_OUT: /tmp/mb2bench/medios.json
+        run: php -d memory_limit=512M /tmp/mb2bench-wpcli.phar --allow-root --path=/tmp/mb2bench-wp eval-file manga-bridge-2/benchmarks/wordpress_publish.php
+      - name: Measure 10 mangas - muitos (200 chapters each)
+        env:
+          MBI_BENCH_SCENARIO: muitos
+          MBI_BENCH_OUT: /tmp/mb2bench/muitos.json
+        run: php -d memory_limit=512M /tmp/mb2bench-wpcli.phar --allow-root --path=/tmp/mb2bench-wp eval-file manga-bridge-2/benchmarks/wordpress_publish.php
+      - name: Calculate modeled source request counts separately
+        run: python manga-bridge-2/benchmarks/estimate.py
+      - name: Keep report when benchmark succeeds
+        uses: actions/upload-artifact@v4
+        with:
+          name: manga-bridge-10-manga-benchmark
+          path: /tmp/mb2bench/
+          retention-days: 7
