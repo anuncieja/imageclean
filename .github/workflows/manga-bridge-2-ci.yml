@@ -3,7 +3,7 @@ on:
   push:
     branches: [manga-bridge-2]
     paths:
-      - 'manga-bridge-2/**'
+      - 'manga-bridge-2/engine/**'
       - '.github/workflows/manga-bridge-2-ci.yml'
   workflow_dispatch:
 permissions:
