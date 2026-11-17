@@ -75,12 +75,18 @@ def is_pagination_url(url: str, manga_url: str) -> bool:
 
 
 def chapter_number(label: str, url: str) -> Optional[str]:
-    hit = CHAPTER_NUMBER.search(label or "")
-    if not hit:
+    hits = [number.replace(",", ".") for number in CHAPTER_NUMBER.findall(label or "")]
+    if hits:
+        # Real labels may be 'Capítulo 23: Capítulo 23.5'. The second
+        # number is the precise fractional chapter; the first is a grouping.
+        if any(num.split(".")[0] != hits[0].split(".")[0] for num in hits[1:]):
+            return None  # contradictory labels require manual review
+        value = hits[-1]
+    else:
         hit = re.search(r"cap[ií]tulo[-_/](\d+(?:[.,]\d+)?)", url, re.I)
-    if not hit:
-        return None
-    value = hit.group(1).replace(",", ".")
+        if not hit:
+            return None
+        value = hit.group(1).replace(",", ".")
     if len(value) > 16:
         return None
     return value

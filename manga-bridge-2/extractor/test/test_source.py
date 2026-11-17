@@ -62,6 +62,20 @@ class ExtractorTests(unittest.TestCase):
         self.assertEqual(p.title, "Meu Mangá")
         self.assertEqual(p.cover_url, "https://cdn.example.org/capa.webp")
 
+    def test_real_style_fractional_chapters_are_distinct(self):
+        self.assertEqual(chapter_number("Capítulo 23: Capítulo 23.5", CAP1), "23.5")
+        self.assertEqual(chapter_number("Capítulo 23: Capítulo 23.2", CAP1), "23.2")
+        self.assertEqual(chapter_number("Capítulo 23: Capítulo 23", CAP1), "23")
+        self.assertIsNone(chapter_number("Capítulo 23: Capítulo 24", CAP1))
+        f = FakeFetcher({ROOT: html([
+            ("23: Capítulo 23.5", CAP1),
+            ("23: Capítulo 23.2", CAP2),
+            ("23: Capítulo 23", CAP3)
+        ], 3)})
+        r = InventoryCrawler(f).crawl(ROOT)
+        self.assertEqual(r["status"], "inventory_complete")
+        self.assertEqual(r["duplicateChapterNumbers"], 0)
+
     def test_page_detection_strict(self):
         self.assertTrue(is_pagination_url(PAGE2, ROOT))
         self.assertTrue(is_pagination_url(ROOT + "?paged=3", ROOT))
