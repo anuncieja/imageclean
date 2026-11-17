@@ -1,0 +1,50 @@
+name: Manga Bridge - 10 manga synthetic capacity benchmark
+on:
+  push:
+    branches: [manga-bridge-benchmarks]
+    paths:
+      - 'manga-bridge-2/benchmarks/**'
+      - '.github/workflows/manga-bridge-benchmarks.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: manga-bridge-benchmark
+  cancel-in-progress: true
+jobs:
+  synthetic-10-manga:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: mb2_benchmark
+          MARIADB_ROOT_PASSWORD: disposable_benchmark_only
+        ports: ['127.0.0.1:3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mysqli, mbstring, dom, openssl
+          coverage: none
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Real database-write timings; synthetic manga, no external origins
+        env:
+          MB2_BENCH_DB_PASSWORD: disposable_benchmark_only
+        run: bash manga-bridge-2/benchmarks/run-wp.sh
+      - name: Upload exact measurements and transparent estimates
+        uses: actions/upload-artifact@v4
+        with:
+          name: manga-bridge-ten-manga-benchmark
+          path: manga-bridge-2/benchmarks/out/*.json
+          retention-days: 7
+          if-no-files-found: error
