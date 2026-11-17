@@ -20,7 +20,7 @@ verify53(get_option('mbi53_settings_before')===get_option('mbi_settings'),'setti
 verify53(get_option('mbi53_serial_before')===get_option('mbi_serial_batch'),'active batch preserved');
 if($phase==='verify'){
  verify53(get_option('mbi_version')==='1.7.53','version upgrade completed');
- verify53(!get_option('mbi_run_dedupe_upgrade')&&!get_option('mbi_run_validation_upgrade')&&get_option('mbi_upgrade53')['deferred_legacy_flags']['validation']===1,'historical flags archived without catalogue mutations');
+ verify53(!get_option('mbi_run_dedupe_upgrade')&&!get_option('mbi_run_validation_upgrade')&&(int)get_option('mbi_upgrade53')['deferred_legacy_flags']['validation']===1,'historical flags archived without catalogue mutations');
  delete_transient('mbi_invalid_cover_count');global $wpdb;$before=$wpdb->num_queries;
  $guard=function($sql){global $wpdb;if(stripos($sql,'SELECT')!==false&&strpos($sql,$wpdb->posts)!==false){throw new RuntimeException('Catalogue scan in cached-only counter');}return $sql;};
  add_filter('query',$guard);$count=mbi()->importer->invalid_cover_count(true);remove_filter('query',$guard);
