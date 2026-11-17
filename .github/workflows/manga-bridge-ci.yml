@@ -1,10 +1,10 @@
 name: Manga Bridge isolated checks
 on:
   push:
-    branches: [manga-bridge-2, manga-bridge-2-transport]
+    branches: [manga-bridge-2, manga-bridge-2-transport, manga-bridge-1-7-53]
     paths: ['manga-bridge-2/**', '.github/workflows/manga-bridge-*.yml']
   pull_request:
-    branches: [manga-bridge-2]
+    branches: [manga-bridge-2, manga-bridge-2-transport]
     paths: ['manga-bridge-2/**', '.github/workflows/manga-bridge-*.yml']
   workflow_dispatch:
 permissions:
