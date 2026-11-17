@@ -3,7 +3,6 @@
  * Ten synthetic manga: WordPress DB publication only.
  * Never run outside disposable CI. No real URLs, no network image validations.
  */
-declare(strict_types=1);
 global $wpdb;
 if (!defined('WP_CLI') || !WP_CLI || wp_get_environment_type() !== 'staging'
  || !defined('MBI_BENCHMARK_CI') || !MBI_BENCHMARK_CI
