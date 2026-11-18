@@ -7,10 +7,10 @@ import uuid
 from engine import Blocked, Yield, SafeHTTP, collect_work
 from protocol import Client, Cancelled, TransportError, key_bytes
 
-def main():
+def main(client_factory=Client, http_factory=SafeHTTP):
     job_id = os.environ.get("MBI2_JOB_ID", "")
     uuid.UUID(job_id)
-    client = Client(os.environ["MBI2_WORDPRESS_ENDPOINT"], key_bytes(os.environ["MBI2_HMAC_KEY_B64"]), job_id)
+    client = client_factory(os.environ["MBI2_WORDPRESS_ENDPOINT"], key_bytes(os.environ["MBI2_HMAC_KEY_B64"]), job_id)
     job = client.get()
     client.event("claim")
     checkpoint = job.get("checkpoint", {})
@@ -18,7 +18,7 @@ def main():
     allowed_sources = {"mangalivre.blog", "www.mangalivre.blog", "mangalivre.to", "www.mangalivre.to"}
     media = {h.strip().lower() for h in os.environ.get("MBI2_ALLOWED_MEDIA_HOSTS", "").split(",") if h.strip()}
     media |= allowed_sources
-    http = SafeHTTP(allowed_sources, media, heartbeat=lambda: client.event("progress", checkpoint))
+    http = http_factory(allowed_sources, media, heartbeat=lambda: client.event("progress", checkpoint))
     def progress(value):
         nonlocal checkpoint
         checkpoint = value
@@ -26,9 +26,9 @@ def main():
     try:
         if source_host not in allowed_sources:
             raise Blocked("unsupported_source")
-        result = collect_work(job["source_url"], http, checkpoint, progress)
+        result = collect_work(job["source_url"], http, checkpoint, progress, publication=job.get("publish_on_ready") is True)
         client.event("ready", result)
-        print(json.dumps({"event": "staging_ready", "job_id": job_id, "source_http": http.requests, "worker_http": 0, "published": 0}))
+        print(json.dumps({"event": "wordpress_result_received", "job_id": job_id, "source_http": http.requests, "worker_http": 0, "published": 0}))
     except (Yield, TimeoutError, ConnectionError, socket.gaierror, OSError):
         client.event("waiting_origin", checkpoint, "network_or_resource_wait")
         print(json.dumps({"event": "waiting_origin", "job_id": job_id, "source_http": http.requests, "worker_http": 0}))

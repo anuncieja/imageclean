@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Manga Bridge Control — Staging
- * Description: Transporte externo isolado. Não publica, altera ou remove conteúdo do Manga Bridge Importer.
- * Version: 0.1.0
+ * Description: Coleta pelo GitHub Actions e publicação de obras novas autorizadas em staging. Requer Manga Bridge Importer 1.7.53.
+ * Version: 0.2.0
  * Requires at least: 6.4
  * Requires PHP: 8.4
  */
@@ -11,5 +11,6 @@ if (!defined('ABSPATH')) { exit; }
 require_once __DIR__ . '/includes/Protocol.php';
 require_once __DIR__ . '/includes/Job.php';
 require_once __DIR__ . '/includes/Store.php';
+require_once __DIR__ . '/includes/Publisher.php';
 require_once __DIR__ . '/includes/Plugin.php';
 \MangaBridge2\Plugin::boot();

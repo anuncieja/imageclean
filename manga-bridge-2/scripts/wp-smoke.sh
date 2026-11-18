@@ -13,12 +13,13 @@ wpci core download --version=latest --skip-content
 wpci config create --dbname=mbi2_ci --dbuser=root --dbpass="$MBI2_CI_DB_PASSWORD" --dbhost=127.0.0.1 --extra-php <<'PHP'
 define('WP_ENVIRONMENT_TYPE', 'staging');
 define('MBI2_EXTERNAL_ENABLED', true);
+define('MBI2_EXTERNAL_PUBLISH', true);
 define('MBI2_HMAC_KEY_B64', getenv('MBI2_HMAC_KEY_B64'));
 define('DISABLE_WP_CRON', true);
 PHP
 task_admin_password="$(php -r 'echo bin2hex(random_bytes(24));')"
 wpci core install --url=http://127.0.0.1:8085 --title="Disposable Manga Bridge CI" --admin_user=mbi2_ci --admin_password="$task_admin_password" --admin_email=ci@example.org --skip-email
-wpci plugin install "$MBI2_CI_PROJECT_DIR/manga-bridge-2/dist/manga-bridge-control-0.1.0-staging.zip"
+wpci plugin install "$MBI2_CI_PROJECT_DIR/manga-bridge-2/dist/manga-bridge-control-0.2.0-staging.zip"
 wpci option update permalink_structure '/%postname%/'
 wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-integration.php";'
 php -S 127.0.0.1:8085 -t "$task_wp_dir" "$task_wp_dir/index.php" > /tmp/mbi2-loopback-server.log 2>&1 &
@@ -58,4 +59,12 @@ if [[ -f "$MBI2_CI_PROJECT_DIR/manga-bridge-2/release53/tests/package.py" ]]; th
   python manga-bridge-2/tests/http_smoke.py
   wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-preservation.php";'
   echo "Combined staging: signed HTTP passed with both active and no catalogue record changed."
+fi
+
+if [[ -f "$MBI2_CI_PROJECT_DIR/manga-bridge-2/release53/tests/package.py" ]]; then
+  for pilot_case in complete incomplete duplicate; do
+    MBI2_PILOT_CASE="seed_$pilot_case" wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-pilot.php";'
+    python manga-bridge-2/tests/pilot-run.py
+    MBI2_PILOT_CASE="check_$pilot_case" wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-pilot.php";'
+  done
 fi

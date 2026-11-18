@@ -28,11 +28,12 @@ final class Job {
         if (!self::uuid($generation) || !in_array($action, ['cancel', 'resume'], true)) {
             throw new \InvalidArgumentException('invalid_control');
         }
+        if (in_array($job['state'], ['publishing','published'], true)) { throw new \DomainException('publication_already_started'); }
         if ($action === 'resume' && !in_array($job['state'], ['blocked', 'waiting_origin', 'cancelled'], true)) {
             throw new \DomainException('job_not_resumable');
         }
         $job['state'] = $action === 'cancel' ? 'cancelled' : 'queued';
-        if ($action === 'resume') { $job['attempts'] = 0; $job['reason'] = ''; unset($job['github_run_id']); }
+        if ($action === 'resume') { $job['attempts'] = 0; $job['reason'] = ''; unset($job['github_run_id'],$job['ready_at'],$job['publish_attempts']); }
         $job['generation'] = $generation; $job['attempt'] = ''; $job['lease_until'] = 0;
         $job['revision']++; $job['updated_at'] = $now; $job['last_event_hash'] = '';
         return $job;
@@ -69,7 +70,7 @@ final class Job {
             }
             $job['checkpoint'] = $checkpoint;
             $job['reason'] = substr(preg_replace('/[^a-z0-9_.-]/', '', (string) ($event['reason'] ?? '')), 0, 120);
-            // READY is only a staging result; never a public WordPress publication.
+            // READY reports collection. Only the WordPress publisher can confirm publication.
             $job['state'] = $kind === 'progress' ? 'running' : $kind;
             $job['lease_until'] = $kind === 'progress' ? $now + 90 : 0;
         }

@@ -17,7 +17,7 @@ from html.parser import HTMLParser
 # Use the same chapter-list parser that passed the phase-2 source tests.
 # This process only reads source HTML; publishing is not implemented here.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from extractor.source import parse_html
+from extractor.source import parse_html, chapter_number
 
 PROXY_HOST = "img.lermangaonline.com.br"
 
@@ -245,9 +245,29 @@ class SafeHTTP:
         finally:
             conn.close()
 
-def collect_work(url, http, checkpoint=None, progress=None):
+def publication_chapter(doc, url, pages):
+    # Publication requires a source-declared page count, not just the links
+    # we happened to see. The analysis-only mode remains more permissive.
+    counts = []
+    for node in doc.nodes:
+        if node["attrs"].get("data-page-count") and doc.classes(node) & {"reading-content", "reader-pages", "chapter-content"}:
+            counts.append(node["attrs"]["data-page-count"])
+    meta = doc.meta("manga:page_count")
+    if meta:
+        counts.append(meta)
+    if not counts or any(not re.fullmatch(r"[1-9][0-9]{0,2}", n) or int(n) != len(pages) for n in counts):
+        raise Blocked("unproven_reader_page_count")
+    label = doc.meta("og:title") or next((clean(n["text"]) for n in doc.nodes if n["tag"] == "h1"), "")
+    number = chapter_number(label, url)
+    if not number:
+        raise Blocked("unproven_chapter_number")
+    return {"number": number, "expected_pages": len(pages)}
+
+def collect_work(url, http, checkpoint=None, progress=None, publication=False):
     state = checkpoint if isinstance(checkpoint, dict) else {}
     work = root_data(http.get(url).decode("utf-8", "replace"), url)
+    if publication and work["expected_chapters"] > 20:
+        raise Blocked("pilot_chapter_limit")
     while len(work["chapter_urls"]) < work["expected_chapters"]:
         loader = work["loader"]
         if not loader:
@@ -263,8 +283,8 @@ def collect_work(url, http, checkpoint=None, progress=None):
             raise Blocked("nonadvancing_or_duplicate_inventory")
         work["chapter_urls"] = merged; loader["offset"] = data["offset"]
     identity = hashlib.sha256(json.dumps([url, work["cover_url"], work["chapter_urls"]], separators=(",", ":")).encode()).hexdigest()
-    if state.get("inventory_hash") != identity:
-        state = {"inventory_hash": identity, "chapters": [], "images": {}}
+    if state.get("inventory_hash") != identity or bool(state.get("publication")) != publication:
+        state = {"inventory_hash": identity, "chapters": [], "images": {}, "publication": publication}
     state["work"] = {k: v for k, v in work.items() if k != "loader"}
     last_progress = [time.monotonic()]
     def save(force=False):
@@ -275,6 +295,8 @@ def collect_work(url, http, checkpoint=None, progress=None):
         if not content_image(image):
             raise Blocked("invalid_content_image")
         if image not in state["images"]:
+            if publication and len(state["images"]) >= 250:
+                raise Blocked("pilot_image_limit")
             raw = http.get(image, image=True)
             width, height = image_dimensions(raw)
             if min(width, height) <= 0 or max(width, height) < 40:
@@ -296,9 +318,14 @@ def collect_work(url, http, checkpoint=None, progress=None):
                         pages.append(candidate)
             if not pages:
                 raise Blocked("no_reader_images")
+            if publication and len(pages) > 100:
+                raise Blocked("pilot_chapter_page_limit")
+            extra = publication_chapter(doc, chapter_url, pages) if publication else {}
+            if extra and any(c.get("number") == extra["number"] for c in state["chapters"]):
+                raise Blocked("duplicate_chapter_number")
             for page in pages:
                 probe(page)
-            state["chapters"].append({"url": chapter_url, "pages": pages})
+            state["chapters"].append({"url": chapter_url, "pages": pages, **extra})
             completed.add(chapter_url)
             save(True)
         if len(state["chapters"]) != work["expected_chapters"]:

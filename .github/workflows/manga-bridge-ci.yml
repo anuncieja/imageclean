@@ -1,7 +1,7 @@
 name: Manga Bridge isolated checks
 on:
   push:
-    branches: [manga-bridge-2, manga-bridge-2-transport]
+    branches: [manga-bridge-2, manga-bridge-2-transport, manga-bridge-github-publisher]
     paths: ['manga-bridge-2/**', '.github/workflows/manga-bridge-*.yml']
   pull_request:
     branches: [manga-bridge-2, manga-bridge-2-transport]
@@ -48,9 +48,9 @@ jobs:
           PYTHONPATH=manga-bridge-2 python -m unittest discover -s manga-bridge-2/extractor/test -v
           php manga-bridge-2/tests/php-tests.php
           python -m unittest discover -s manga-bridge-2/tests -p 'test_*.py' -v
-      - name: Package isolated staging extension
+      - name: Package GitHub publisher pilot
         run: python manga-bridge-2/scripts/package.py
-      - name: WordPress and MariaDB transport and preservation
+      - name: WordPress, MariaDB and Actions publisher pilot
         env:
           MBI2_CI_DB_PASSWORD: mbi2-disposable-ci-only
         run: bash manga-bridge-2/scripts/wp-smoke.sh
