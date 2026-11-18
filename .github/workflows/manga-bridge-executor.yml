@@ -1,0 +1,40 @@
+name: Manga Bridge — Importação em staging
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: 'UUID of an existing authenticated staging request'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: mbi2-executor
+  cancel-in-progress: false
+jobs:
+  collect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: manga-bridge-staging
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Keep the validated runner on its isolated branch and pin its exact code.
+          ref: '3c31f2c65d032990bea27756d67e6f31bf9d67a5'
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Collect one staging work
+        env:
+          MBI2_JOB_ID: ${{ inputs.job_id }}
+          MBI2_WORDPRESS_ENDPOINT: ${{ secrets.MBI2_WORDPRESS_ENDPOINT }}
+          MBI2_HMAC_KEY_B64: ${{ secrets.MBI2_HMAC_KEY_B64 }}
+          MBI2_ALLOWED_MEDIA_HOSTS: ${{ vars.MBI2_ALLOWED_MEDIA_HOSTS }}
+        run: |
+          if [ -z "$MBI2_WORDPRESS_ENDPOINT" ] || [ -z "$MBI2_HMAC_KEY_B64" ]; then
+            echo 'Configure o ambiente manga-bridge-staging antes do primeiro pedido.' >&2
+            exit 1
+          fi
+          python manga-bridge-2/engine/run.py
