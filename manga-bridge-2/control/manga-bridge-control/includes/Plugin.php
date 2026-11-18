@@ -9,6 +9,7 @@ final class Plugin {
         add_action('admin_post_mbi2_create', [self::class, 'create']);
         add_action('admin_post_mbi2_control', [self::class, 'control']);
         add_action('mbi2_dispatch', [self::class, 'dispatch']);
+        add_action('mbi2_publish', [self::class, 'publish']);
         add_action('mbi2_watchdog', [self::class, 'watchdog'], 10, 3);
     }
     public static function enabled(): bool {
@@ -56,10 +57,16 @@ final class Plugin {
             $job = Store::read((string) $request['id']);
             if (!$job) { return new \WP_Error('mbi2_missing', 'Pedido inexistente.', ['status' => 404]); }
             $next = Job::event($job, $data, $raw, time());
+            if ($next !== $job && $next['state'] === 'ready' && !empty($next['publish_on_ready'])) {
+                if (!Publisher::enabled()) { throw new \DomainException('publisher_disabled'); }
+                Publisher::manifest($next, $next['checkpoint']);
+                $next['ready_at'] = time();
+            }
             if ($next !== $job && !Store::swap($job, $next)) { throw new \DomainException('revision_conflict'); }
             if ($next['state'] === 'waiting_origin') { self::wake($next['id'], 60); }
             if ($next['state'] === 'running') { self::watch($next); }
-            return new \WP_REST_Response(['id' => $next['id'], 'state' => $next['state'], 'revision' => $next['revision'], 'published' => 0]);
+            if ($next['state'] === 'ready' && !empty($next['publish_on_ready'])) { self::schedulePublish($next['id']); }
+            return new \WP_REST_Response(['id' => $next['id'], 'state' => $next['state'], 'revision' => $next['revision'], 'published' => $next['published']]);
         } catch (\DomainException $e) { return new \WP_Error('mbi2_conflict', $e->getMessage(), ['status' => 409]); }
         catch (\InvalidArgumentException | \JsonException $e) { return new \WP_Error('mbi2_input', 'Evento inválido.', ['status' => 400]); }
         catch (\Throwable $e) { return new \WP_Error('mbi2_storage', 'Não foi possível gravar o evento.', ['status' => 500]); }
@@ -71,14 +78,15 @@ final class Plugin {
         if (!current_user_can('manage_options')) { return; }
         $id = sanitize_text_field((string) ($_GET['job'] ?? ''));
         $job = Job::uuid($id) ? Store::read($id) : null;
-        echo '<div class="wrap"><h1>Manga Bridge — comunicação de staging</h1><p>Esta extensão é isolada: não publica nem altera o catálogo. O importador atual permanece ativo.</p>';
+        echo '<div class="wrap"><h1>Manga Bridge — GitHub Actions</h1><p>O GitHub coleta e verifica a obra. Sites de staging podem receber e publicar uma obra inédita por URL.</p>';
+        if (!Publisher::enabled()) { echo '<p>Somente coleta: publicação por GitHub desativada neste site.</p>'; }
         if (!self::enabled()) { echo '<div class="notice notice-warning"><p>Configure o transporte em staging antes de criar pedidos. Produção é bloqueada nesta versão.</p></div>'; }
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
         wp_nonce_field('mbi2_create'); echo '<input type="hidden" name="request_id" value="' . esc_attr(wp_generate_uuid4()) . '">'; echo '<input type="hidden" name="action" value="mbi2_create"><label>URL da obra <input required type="url" name="source_url" size="75"></label> ';
-        submit_button('Coletar em staging', 'primary', 'submit', false, self::enabled() ? [] : ['disabled' => 'disabled']);
+        submit_button(Publisher::enabled() ? 'Importar e publicar via GitHub' : 'Coletar em staging', 'primary', 'submit', false, self::enabled() ? [] : ['disabled' => 'disabled']);
         echo '</form>';
         if ($job) {
-            echo '<p>Pedido: <code>' . esc_html($job['id']) . '</code></p><p>Estado: <strong>' . esc_html($job['state']) . '</strong>; revisão ' . (int) $job['revision'] . '; publicações: 0 (staging).</p>';
+            echo '<p>Pedido: <code>' . esc_html($job['id']) . '</code></p><p>Estado: <strong>' . esc_html($job['state']) . '</strong>; revisão ' . (int) $job['revision'] . '; publicações: ' . (int)$job['published'] . '</p>';
             echo '<p>Motivo: ' . esc_html($job['reason']) . '</p>';
             echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
             wp_nonce_field('mbi2_control'); echo '<input type="hidden" name="action" value="mbi2_control"><input type="hidden" name="job" value="' . esc_attr($id) . '">';
@@ -127,6 +135,7 @@ final class Plugin {
                 wp_safe_redirect(admin_url('tools.php?page=mbi2-staging&job=' . $id)); exit;
             }
             $job = Job::create($id, wp_generate_uuid4(), $url, self::hosts(), time());
+            if (Publisher::enabled()) { $job['publish_on_ready'] = true; }
             if (!Store::create($job)) { throw new \RuntimeException('duplicate_id'); }
             self::wake($id);
             wp_safe_redirect(admin_url('tools.php?page=mbi2-staging&job=' . $id)); exit;
@@ -145,6 +154,47 @@ final class Plugin {
             wp_safe_redirect(admin_url('tools.php?page=mbi2-staging&job=' . $id)); exit;
         } catch (\Throwable $e) { wp_die('Controle recusado. Atualize o estado do pedido e tente novamente.', '', ['response' => 409]); }
     }
+    private static function schedulePublish(string $id, int $delay = 2): void {
+        $args = [$id];
+        if (!wp_next_scheduled('mbi2_publish', $args)) {
+            wp_schedule_single_event(time() + $delay, 'mbi2_publish', $args);
+        }
+    }
+
+    /** Claim the final WordPress write independently of the GitHub run. */
+    public static function publish(string $id): void {
+        if (!Publisher::enabled()) { return; }
+        $job = Store::read($id);
+        if (!$job || empty($job['publish_on_ready']) || !in_array($job['state'], ['ready','publishing'], true)) { return; }
+        if ($job['state'] === 'publishing' && ($job['publish_until'] ?? 0) > time()) {
+            self::schedulePublish($id, max(5, $job['publish_until'] - time() + 5)); return;
+        }
+        if (!\MBI_Resource_Guard::begin('publicação GitHub', false)) { self::schedulePublish($id, 30); return; }
+        try {
+            if (mbi()->importer->is_paused()) { self::schedulePublish($id, 30); return; }
+            $next = $job; $next['revision']++; $next['updated_at'] = time();
+            if (($job['ready_at'] ?? 0) < time()-900 || ($job['publish_attempts'] ?? 0) >= 3) {
+                $next['state'] = 'blocked'; $next['reason'] = 'publication_budget_expired'; Store::swap($job,$next); return;
+            }
+            $next['state'] = 'publishing'; $next['publish_until'] = time()+90;
+            $next['publish_attempts'] = ($job['publish_attempts'] ?? 0)+1;
+            if (!Store::swap($job, $next)) { return; }
+            // A crashed PHP request can restart the same job and reuse its drafts.
+            self::schedulePublish($id, 100);
+            $done=$next; $done['revision']++; $done['updated_at']=time(); $done['publish_until']=0;
+            try {
+                $manifest=Publisher::manifest($next,$next['checkpoint']);
+                $postId=Publisher::publish($next,$manifest);
+                $done['state']='published'; $done['published']=1; $done['post_id']=$postId; $done['reason']='wordpress_confirmed_published';
+            } catch (\DomainException | \InvalidArgumentException $e) {
+                $done['state']='blocked'; $done['reason']=$e->getMessage();
+            } catch (\Throwable $e) {
+                $done['state']='ready'; $done['reason']='wordpress_write_retry';
+            }
+            Store::swap($next,$done);
+        } finally { \MBI_Resource_Guard::end(); }
+    }
+
     /** Fixed GitHub endpoint; incoming payloads cannot choose callback hosts or repository. */
     public static function dispatch(string $id): void {
         if (!self::enabled()) { return; }
@@ -163,10 +213,16 @@ final class Plugin {
         if (!wp_next_scheduled('mbi2_watchdog', $args)) {
             wp_schedule_single_event(time() + 300, 'mbi2_watchdog', $args);
         }
-        $response = wp_remote_post('https://api.github.com/repos/anuncieja/imageclean/actions/workflows/manga-bridge-executor.yml/dispatches', [
+        $repo = defined('MBI2_GITHUB_REPOSITORY') ? (string)MBI2_GITHUB_REPOSITORY : 'anuncieja/imageclean';
+        $ref = defined('MBI2_GITHUB_REF') ? (string)MBI2_GITHUB_REF : 'manga-bridge-github-publisher';
+        if (!preg_match('~^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$~D', $repo) || !preg_match('~^[A-Za-z0-9_/-][A-Za-z0-9_./-]{0,120}$~D', $ref)) {
+            $failed=$next; $failed['state']='blocked'; $failed['reason']='invalid_github_configuration'; $failed['revision']++;
+            Store::swap($next,$failed); return;
+        }
+        $response = wp_remote_post('https://api.github.com/repos/' . $repo . '/actions/workflows/manga-bridge-executor.yml/dispatches', [
             'timeout' => 10, 'redirection' => 0,
             'headers' => ['Authorization' => 'Bearer ' . MBI2_GITHUB_TOKEN, 'Accept' => 'application/vnd.github+json', 'X-GitHub-Api-Version' => '2022-11-28', 'Content-Type' => 'application/json'],
-            'body' => wp_json_encode(['ref' => 'manga-bridge-2-transport', 'inputs' => ['job_id' => $id], 'return_run_details' => true])
+            'body' => wp_json_encode(['ref' => $ref, 'inputs' => ['job_id' => $id], 'return_run_details' => true])
         ]);
         $latest = Store::read($id);
         if (!$latest || $latest['generation'] !== $job['generation'] || $latest['state'] !== 'dispatching') { return; }

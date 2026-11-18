@@ -1,0 +1,15 @@
+# GitHub como motor do Manga Bridge: piloto de publicação
+
+A obra nova enviada pelo painel Ferramentas → Manga Bridge — Staging é processada no GitHub Actions. O runner coleta os dados e verifica os cabeçalhos de todas as imagens da origem. O WordPress recebe o resultado autenticado, valida o inventário, usa a configuração local de entrega e grava a obra com seus capítulos. A publicação é confirmada pelo WordPress, no cron. O runner não recebe acesso ao banco nem credenciais editoriais. Sem plano B de coleta no WordPress nesse fluxo.
+
+Escopo: staging, uma obra inédita por URL, até 20 capítulos, 100 páginas por capítulo e 250 imagens originais distintas. A fonte precisa listar a quantidade de capítulos, e cada leitor precisa informar a quantidade de páginas num formato suportado. Capas inválidas, inventário incompleto e obras já existentes ficam bloqueados. Pedidos em quantidade e capítulos novos de obras existentes ainda usam o importador atual e não integram o piloto. Não alterar capas, slugs, capítulos ou status de obras preexistentes. Sem chamadas ao Worker na publicação.
+
+## Preparação privada
+- Manga Bridge Importer v1.7.53 ativo. Instalar a extensão Manga Bridge Control v0.2.0 apenas em staging.
+- No wp-config.php privado: WP_ENVIRONMENT_TYPE=staging, MBI2_EXTERNAL_ENABLED=true, MBI2_EXTERNAL_PUBLISH=true, MBI2_HMAC_KEY_B64 (32 bytes aleatórios em base64), MBI2_GITHUB_TOKEN (Actions: write no repositório escolhido), MBI2_GITHUB_REPOSITORY (dono/repo), MBI2_GITHUB_REF (branch testada), MBI2_ALLOWED_MEDIA_HOSTS (lista CSV exata de origens de imagem). Não publicar valores reais no código, issues ou logs.
+- No GitHub Actions, secrets MBI2_WORDPRESS_ENDPOINT (URL HTTPS do staging terminando em /wp-json/mbi2/v1) e MBI2_HMAC_KEY_B64 (mesma chave privada), e variável MBI2_ALLOWED_MEDIA_HOSTS com as mesmas origens autorizadas.
+- O arquivo .github/workflows/manga-bridge-executor.yml precisa estar na branch padrão do repositório que recebe o dispatch. O main do ImageClean não foi alterado. A alternativa é um repositório dedicado cujo padrão tenha o workflow. Definir MBI2_WORKFLOW_REGISTERED=true somente depois de confirmar o registro.
+- Configurar cron real no staging e confirmar que ele roda sem painel aberto. Abrir Ferramentas → Manga Bridge — Staging → Importar e publicar via GitHub. O estado ready significa que a coleta chegou; published confirma a publicação. Parar continua disponível antes de começar a gravação final.
+- Rodar o piloto em staging com uma obra autorizada antes de qualquer configuração de produção. Esta versão bloqueia execução externa em produção por código.
+
+A CI usa o executor Python real com uma origem sintética, comunicação assinada real em loopback e WordPress/MariaDB descartáveis. Não usa credenciais do site e não chama o workflow remoto do próprio repositório. Testa aceitar resultado íntegro, rejeitar página faltando e preservar obra existente diante de outro pedido para a mesma URL. O teste não comprova DNS/WAF/cron da hospedagem, layout de toda obra nem tempo em produção.
