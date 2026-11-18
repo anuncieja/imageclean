@@ -1,7 +1,8 @@
 <?php
 if (!defined('WP_CLI') || !WP_CLI || wp_get_environment_type() !== 'staging') { throw new RuntimeException('CI staging only'); }
 function verify53($ok,$message){if(!$ok)throw new RuntimeException($message);echo "PASS $message\n";}
-function digest53(){global $wpdb;$data=[];foreach([$wpdb->posts,$wpdb->postmeta,$wpdb->term_relationships,$wpdb->prefix.'mbi_queue'] as $table){$rows=$wpdb->get_results("SELECT * FROM $table",ARRAY_A);usort($rows,fn($a,$b)=>strcmp(wp_json_encode($a),wp_json_encode($b)));$data[$table]=$rows;}return hash('sha256',wp_json_encode($data));}
+function digest53(){global $wpdb;$data=[];foreach([$wpdb->posts,$wpdb->postmeta,$wpdb->term_relationships,$wpdb->prefix.'mbi_queue'] as $table){$rows=$wpdb->get_results("SELECT * FROM $table",ARRAY_A);usort($rows,fn($a,$b)=>strcmp(wp_json_encode($a),wp_json_encode($b)));$data[$table]=hash('sha256',wp_json_encode($rows));}return $data;}
+function preserved53(): bool { $before=(array)get_option('mbi53_preserved_state'); $changed=array_keys(array_diff_assoc(digest53(),$before)); if ($changed) { echo "Changed fixture tables: ".implode(', ',$changed)."\n"; } return $changed===[]; }
 $phase=getenv('MBI53_PHASE');
 if($phase==='seed'){
  verify53(MBI_VERSION==='1.7.52','real 1.7.52 executable baseline active');
@@ -16,7 +17,7 @@ if($phase==='seed'){
  update_option('mbi_run_dedupe_upgrade',1,false);update_option('mbi_run_validation_upgrade',1,false);update_option('mbi_version','1.7.52',false);
  echo "Seeded real 1.7.52 with published catalogue and pending queue.\n";return;
 }
-verify53(hash_equals((string)get_option('mbi53_preserved_state'),digest53()),'catalogue and pending queue preserved');
+verify53(preserved53(),'catalogue and pending queue preserved');
 verify53(get_option('mbi53_settings_before')===get_option('mbi_settings'),'settings preserved');
 verify53(get_option('mbi53_serial_before')===get_option('mbi_serial_batch'),'active batch preserved');
 if($phase==='rollback'){verify53(MBI_VERSION==='1.7.52' && get_option('mbi_version')==='1.7.52','rollback booted real 1.7.52');}
@@ -31,6 +32,6 @@ if($phase==='verify'){
  $before=$wpdb->num_queries;verify53($r->invoke(mbi()->importer,['generation'=>$gen])===true,'validation permits current owner');$queries=$wpdb->num_queries-$before;verify53($queries===1,'fresh pause and generation control uses exactly one SQL read');
  update_option('mbi_queue_paused',1,false);verify53(!$r->invoke(mbi()->importer,['generation'=>$gen]),'pause observed without stale cache');
  update_option('mbi_process_generation',wp_generate_uuid4(),false);$blocked=false;try{$r->invoke(mbi()->importer,['generation'=>$gen]);}catch(MBI_Skip_Exception $e){$blocked=true;}verify53($blocked,'old generation cannot publish');
- verify53(hash_equals((string)get_option('mbi53_preserved_state'),digest53()),'control checks preserve catalogue and queue');
+ verify53(preserved53(),'control checks preserve catalogue and queue');
 }
 echo 'Environment: WP '.get_bloginfo('version').'; PHP '.PHP_VERSION.'; MariaDB '.$GLOBALS['wpdb']->db_version()."\n";

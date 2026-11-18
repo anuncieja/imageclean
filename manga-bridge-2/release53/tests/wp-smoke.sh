@@ -31,13 +31,13 @@ task_zip53="$task_release/dist/manga-bridge-importer-v1.7.53.zip"
 wp53 option add mbi_version 1.7.52
 wp53 plugin install "$task_zip52" --activate
 MBI53_PHASE=seed wp53 eval 'require getenv("MBI53_REPO_ROOT")."/manga-bridge-2/release53/tests/wordpress.php";'
-wp53 plugin install "$task_zip53" --force
+wp53 --skip-plugins=manga-bridge-importer plugin install "$task_zip53" --force
 MBI53_PHASE=verify wp53 eval 'require getenv("MBI53_REPO_ROOT")."/manga-bridge-2/release53/tests/wordpress.php";'
 wp53 plugin deactivate manga-bridge-importer
 MBI53_PHASE=preserved wp53 eval 'require getenv("MBI53_REPO_ROOT")."/manga-bridge-2/release53/tests/wordpress.php";'
 wp53 plugin activate manga-bridge-importer
 MBI53_PHASE=preserved wp53 eval 'require getenv("MBI53_REPO_ROOT")."/manga-bridge-2/release53/tests/wordpress.php";'
-wp53 plugin install "$task_zip52" --force
+wp53 --skip-plugins=manga-bridge-importer plugin install "$task_zip52" --force
 MBI53_PHASE=rollback wp53 eval 'require getenv("MBI53_REPO_ROOT")."/manga-bridge-2/release53/tests/wordpress.php";'
-wp53 plugin install "$task_zip53" --force
+wp53 --skip-plugins=manga-bridge-importer plugin install "$task_zip53" --force
 wp53 eval 'require getenv("MBI53_REPO_ROOT")."/manga-bridge-2/release53/tests/publication.php";'
