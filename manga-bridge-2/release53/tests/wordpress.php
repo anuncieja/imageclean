@@ -13,6 +13,12 @@ if($phase==='seed'){
  update_post_meta($c,'_mbi_source_url','https://mangalivre.blog/capitulo/ci-1/');update_post_meta($c,'_mbi_source_image_urls',['https://example.org/page.jpg']);update_post_meta($c,'_mbi_chapter_page_urls',['https://example.org/page.jpg']);
  update_option('mbi_queue_paused',1,false);update_option('mbi_serial_batch',['id'=>'ci-prior-batch','active'=>true,'cursor'=>0,'target'=>10,'completed'=>0,'items'=>[]],false);
  mbi()->db->queue('manga',['url'=>'https://mangalivre.blog/manga/ci-preserved/','generation'=>wp_generate_uuid4()]);
+ // The legacy upgrader already persists effective defaults on a working site.
+ // Start with that shape, plus deliberately non-default settings.
+ $customized=mbi()->importer->settings();
+ $customized['update_pages']=3;
+ $customized['max_images_chapter']=180;
+ update_option('mbi_settings',$customized,false);
  update_option('mbi53_preserved_state',digest53(),false);update_option('mbi53_settings_before',get_option('mbi_settings'),false);update_option('mbi53_serial_before',get_option('mbi_serial_batch'),false);
  update_option('mbi_run_dedupe_upgrade',1,false);update_option('mbi_run_validation_upgrade',1,false);update_option('mbi_version','1.7.52',false);
  echo "Seeded real 1.7.52 with published catalogue and pending queue.\n";return;
