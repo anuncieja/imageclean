@@ -1,0 +1,521 @@
+--- a/includes/class-mbi-admin.php
++++ b/includes/class-mbi-admin.php
+@@ -190,7 +190,7 @@
+ 		$cleanup  = $this->importer->legacy_media_cleanup_status();
+ 		$proxy_migration = $this->importer->proxy_migration_status();
+ 		$proxy_status = $this->importer->image_proxy_status();
+-		$invalid_covers = $this->importer->invalid_cover_count( true );
++		$invalid_covers = $this->importer->invalid_cover_count();
+ 		$validation_review = $this->importer->validation_review_count();
+ 		$jobs     = $this->db->recent_jobs( 25 );
+ 		$logs     = $this->db->recent_logs( 20 );
+@@ -361,7 +361,7 @@
+ 				<div class="mbi-actions">
+ 					<button type="button" class="button button-secondary" data-mbi-proxy-test>Testar Proxy/CDN agora</button>
+ 					<button type="button" class="button button-secondary" data-mbi-proxy-audit>Auditar origens das imagens</button>
+-					<?php $this->action_form( 'mbi_repair_invalid_covers', 'Reparar capas inválidas' . ( $invalid_covers >= 0 ? ' (' . (int) $invalid_covers . ')' : '' ), 'button button-secondary', 'Somente obras sem capa ou com placeholder serão reparadas. Se a origem não tiver capa real, a primeira página válida de um capítulo já existente será usada como fallback visual. Capítulos, slugs e datas não serão reimportados. Continuar?' ); ?>
++					<?php $this->action_form( 'mbi_repair_invalid_covers', 'Reparar capas inválidas (' . (int) $invalid_covers . ')', 'button button-secondary', 'Somente obras sem capa ou com placeholder serão reparadas. Se a origem não tiver capa real, a primeira página válida de um capítulo já existente será usada como fallback visual. Capítulos, slugs e datas não serão reimportados. Continuar?' ); ?>
+ 					<?php $this->action_form( 'mbi_repair_invalid_chapter_pages', 'Reparar páginas inválidas', 'button button-secondary', 'Relê somente capítulos que contêm assets indevidos como bandeiras/GIFs de interface. Não altera slug, título ou data do capítulo. Continuar?' ); ?>
+ 					<?php $this->action_form( 'mbi_start_proxy_migration', ! empty( $proxy_migration['active'] ) ? 'Continuar migração existente' : 'Migrar imagens existentes para Proxy/CDN', 'button button-primary button-hero', 'A migração altera somente as URLs de entrega de capas e páginas. As URLs originais ficam preservadas internamente; não há download, reimportação de capítulos, alteração de slug ou data de publicação. Continuar?' ); ?>
+ 				</div>
+@@ -1519,7 +1519,7 @@
+ 			$stopped = 'stopped' === $pipeline['phase'];
+ 			$percent = $pipeline['bars']['publish'];
+ 			$reached = $pipeline['published'] >= $pipeline['requested'];
+-			$title = $done ? ( $reached ? 'Quantidade solicitada publicada' : 'Pedido não atendido: faltam publicações' ) : ( $collecting ? 'Coletando dados da obra atual' : 'Validando a obra atual para publicação' );
++			$title = $done ? ( $reached ? 'Quantidade solicitada publicada' : 'Pedido não atendido: faltam publicações' ) : ( $collecting ? 'Coletando candidatas para a quantidade solicitada' : 'Validando e publicando as obras coletadas' );
+ 			$status = $paused && ( $serial_on || $related_catalog ) ? 'PAUSADA' : ( $done ? ( $reached ? 'PEDIDO ATENDIDO' : 'PEDIDO NÃO ATENDIDO' ) : ( $collecting ? 'COLETANDO CANDIDATAS' : 'VALIDANDO PARA PUBLICAR' ) );
+ 			if ( 'select' === $pipeline['phase'] ) { $title = 'Buscando substitutas para completar o pedido'; $status = $paused ? 'PAUSADA' : 'BUSCANDO SUBSTITUTAS'; }
+ 			if ( $stopped ) { $title = 'Lote interrompido'; $status = 'INTERROMPIDO'; }
+--- a/includes/class-mbi-chapter-integrity.php
++++ b/includes/class-mbi-chapter-integrity.php
+@@ -40,7 +40,7 @@
+   return $expected > 0 && count( $source ) === $expected && count( $stored ) === $expected
+    && $stored === self::delivery( $source ) && ( ( $r['version'] ?? 0 ) === 2 || ( ( $r['version'] ?? 0 ) === 1 && get_post_status( $id ) === 'publish' ) )
+    && ( get_post_status( $id ) === 'publish' || $source === $stored || ( $r['coverage'] ?? '' ) === 'browser_all_images' || $autonomous )
+-   && (int) ( $r['count'] ?? 0 ) === $expected && ( $r['snapshot'] ?? '' ) === self::snapshot( $id, false );
++   && (int) ( $r['count'] ?? 0 ) === $expected && ( $r['snapshot'] ?? '' ) === self::snapshot( $id );
+  }
+  public static function verified( int $id, string $coverage = 'server_image_addresses' ): void {
+   $count = (int) get_post_meta( $id, '_mbi_expected_pages', true );
+--- a/includes/class-mbi-importer.php
++++ b/includes/class-mbi-importer.php
+@@ -497,14 +497,13 @@
+ 		return false;
+ 	}
+ 
+-	public function invalid_cover_count( bool $cached_only = false ): int {
++	public function invalid_cover_count(): int {
+ 		// v1.6.12: o contador não pode transformar a abertura do painel em uma varredura
+ 		// completa a cada request. Mantemos um cache curto; o reparo invalida o cache.
+ 		$cached = get_transient( 'mbi_invalid_cover_count' );
+ 		if ( false !== $cached ) {
+ 			return max( 0, (int) $cached );
+ 		}
+-		if ( $cached_only ) { return -1; }
+ 		$ids = get_posts( array(
+ 			'post_type'      => 'mbi_manga',
+ 			'post_status'    => array( 'publish', 'draft', 'private', 'pending' ),
+@@ -1454,7 +1453,6 @@
+ 		// New imports have a finite selection. Old running batches keep their state.
+ 		if ( in_array( $mode, array( 'catalog', 'auto_catalog', 'catalog_full', 'manual_url' ), true ) && empty( $catalog['resume_serial_batch'] ) ) {
+ 			$state['workflow'] = 'collect51';
+-			$state['stream53'] = true;
+ 			$state['quantity_goal52'] = true;
+ 			$state['phase'] = 'collect';
+ 			$state['wave_start'] = 0;
+@@ -1538,18 +1536,6 @@
+ 	}
+ 
+ 	private function advance_capture51( array $s ): void {
+-		if ( ! empty( $s['stream53'] ) ) {
+-			$s['capture_done']++;
+-			$s['current_url'] = ''; $s['current_manga_id'] = 0;
+-			if ( 'collected' === ( $s['rows'][$s['cursor']]['status'] ?? '' ) ) {
+-				$s['phase'] = 'validate'; // Publish this work before collecting the next.
+-			} else {
+-				$s['verified']++; $s['cursor']++; $s['phase'] = 'collect';
+-				if ( $s['cursor'] >= count( $s['items'] ) ) { $this->finish_serial_batch( $s ); return; }
+-			}
+-			update_option( 'mbi_serial_batch', $s, false );
+-			$this->queue_serial_current( $s ); return;
+-		}
+ 		$s['capture_done']++;
+ 		$s['cursor']++;
+ 		$s['current_url'] = '';
+@@ -1676,7 +1662,6 @@
+ 			$state['consecutive_network_failures52'] = 0;
+ 		}
+ 		$state['cursor']           = absint( $state['cursor'] ?? 0 ) + 1;
+-		if ( ! empty( $state['stream53'] ) ) { $state['phase'] = 'collect'; }
+ 		$state['skipped']          = max( absint( $state['skipped'] ?? 0 ), $state['cursor'] - absint( $state['completed'] ?? 0 ) );
+ 		$state['current_url']      = '';
+ 		$state['current_manga_id'] = 0;
+@@ -6082,28 +6067,12 @@
+ 		throw new MBI_Resource_Wait( 'Capítulo mudou: nova leitura limitada para refazer a validação com dados atuais.', 3 );
+ 	}
+ 
+-	private function validation_control_current53( array $payload ): bool {
+-		global $wpdb;
+-		if ( ! isset( $wpdb ) || ! method_exists( $wpdb, 'get_results' ) ) {
+-			$this->assert_current_generation( $payload ); return ! $this->is_paused();
+-		}
+-		$rows = $wpdb->get_results( "SELECT option_name,option_value FROM {$wpdb->options} WHERE option_name IN ('mbi_queue_paused','mbi_process_generation','mbi_generation_enforced')" );
+-		if ( ! is_array( $rows ) || ! empty( $wpdb->last_error ) ) { throw new MBI_Resource_Wait( 'Controle da fila indisponível; publicação adiada.', 3 ); }
+-		$control = array();
+-		foreach ( $rows as $row ) { $control[$row->option_name] = maybe_unserialize( $row->option_value ); }
+-		if ( ! empty( $control['mbi_generation_enforced'] ) ) {
+-			$expected = (string) ( $control['mbi_process_generation'] ?? '' );
+-			$received = (string) ( $payload['generation'] ?? '' );
+-			if ( ! $expected || ! $received || ! hash_equals( $expected, $received ) ) { throw new MBI_Skip_Exception( 'Job invalidado por um reinício controlado do processador.' ); }
+-		}
+-		return empty( $control['mbi_queue_paused'] );
+-	}
+-
+ 	private function finish_delivery_candidate( int $id, array $candidate, array $payload ): void {
+ 		if ( ! isset( $candidate['generation'] ) ) { $candidate['generation'] = $payload['generation'] ?? ''; }
+ 		$checked = false;
+ 		$allowed = function( bool $fresh = true ) use ( $id, $candidate, $payload, &$checked ): bool {
+-			if ( ! $this->validation_control_current53( $payload ) ) { return false; }
++			$this->assert_current_generation( $payload );
++			if ( $this->is_paused() ) { return false; }
+ 			if ( $fresh || ! $checked ) { $this->guard_delivery_candidate( $id, $candidate ); $checked = true; }
+ 			return true;
+ 		};
+--- a/includes/class-mbi-resource-guard.php
++++ b/includes/class-mbi-resource-guard.php
+@@ -125,7 +125,7 @@
+ 		if ( ! self::$lease || false !== $pre ) { return $pre; }
+ 		// Imports validate source bytes and signed tokens locally. They must never
+ 		// spend the public Worker quota, even if legacy metadata contains proxy URLs.
+-		if ( 'diagnóstico' !== ( self::$lease['lane'] ?? '' ) && self::$proxy_host51 && strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) ) === self::$proxy_host51 ) {
++		if ( 'publicação' === ( self::$lease['lane'] ?? '' ) && self::$proxy_host51 && strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) ) === self::$proxy_host51 ) {
+ 			self::$proxy_blocked51++;
+ 			return new WP_Error( 'mbi_public_worker_blocked', 'Chamada ao Worker público bloqueada durante importação. Valide o endereço original da imagem.' );
+ 		}
+--- a/manga-bridge-importer.php
++++ b/manga-bridge-importer.php
+@@ -2,7 +2,7 @@
+ /**
+  * Plugin Name: Mangá Bridge Importer
+  * Description: Importa um catálogo autorizado de mangás e permite detectar e publicar novos capítulos somente por ação manual.
+- * Version: 1.7.53
++ * Version: 1.7.52
+  * Author: BOOOM Criative
+  * Requires at least: 6.4
+  * Requires PHP: 8.0
+@@ -13,7 +13,7 @@
+ 	exit;
+ }
+ 
+-define( 'MBI_VERSION', '1.7.53' );
++define( 'MBI_VERSION', '1.7.52' );
+ define( 'MBI_FILE', __FILE__ );
+ define( 'MBI_DIR', plugin_dir_path( __FILE__ ) );
+ define( 'MBI_URL', plugin_dir_url( __FILE__ ) );
+@@ -69,8 +69,8 @@
+ 
+ 		add_action( 'init', array( $this, 'register_content_types' ) );
+ 		add_action( 'init', array( $this, 'ensure_schedules' ), 20 );
+-		// Legacy catalogue mutations require explicit administrator action.
+-
++		add_action( 'init', array( $this, 'maybe_run_dedupe_upgrade' ), 30 );
++		add_action( 'init', array( $this, 'maybe_run_validation_upgrade' ), 31 );
+ 		add_action( 'init', array( $this, 'maybe_flush_rewrite_rules' ), 99 );
+ 		add_filter( 'cron_schedules', array( $this, 'cron_schedules' ) );
+ 		// v1.7.40: bounded recovery runs before the existing minute cron worker.
+@@ -278,22 +278,342 @@
+ 		delete_option( 'mbi_flush_rewrite_rules' );
+ 	}
+ 
+-	/** v1.7.53: upgrades never replay historical catalogue migrations. */
+ 	public function maybe_upgrade(): void {
+-		$previous = (string) get_option( 'mbi_version', '0.0.0' );
+-		if ( $previous === MBI_VERSION ) { return; }
+-		if ( '0.0.0' === $previous ) { $this->db->install(); }
+-		$deferred = array( 'dedupe' => get_option( 'mbi_run_dedupe_upgrade', false ), 'validation' => get_option( 'mbi_run_validation_upgrade', false ) );
+-		update_option( 'mbi_upgrade53', array( 'from' => $previous, 'to' => MBI_VERSION, 'at' => time(), 'catalogue_changed' => false, 'deferred_legacy_flags' => $deferred ), false );
+-		delete_option( 'mbi_run_dedupe_upgrade' );
+-		delete_option( 'mbi_run_validation_upgrade' );
+-		update_option( 'mbi_version', MBI_VERSION, false );
+-	}
+-
++		$previous_version = (string) get_option( 'mbi_version', '0.0.0' );
++		if ( $previous_version !== MBI_VERSION ) {
++			$this->db->install();
++			$settings = $this->importer->settings();
++			update_option( 'mbi_settings', $settings, false );
++			if ( version_compare( $previous_version, '1.3.5', '<' ) ) {
++				$this->db->reset_import_retries();
++			}
++			if ( version_compare( $previous_version, '1.3.8', '<' ) ) {
++				$removed = $this->db->clear_unfinished_content_jobs();
++				delete_option( 'mbi_serial_batch' );
++				$this->db->log( 'info', 'Migração para fila serial concluída.', array( 'removed' => $removed ) );
++			}
++			if ( version_compare( $previous_version, '1.4.0', '<' ) ) {
++				wp_clear_scheduled_hook( 'mbi_daily_sync' );
++				wp_clear_scheduled_hook( 'mbi_updates_sync' );
++				wp_clear_scheduled_hook( 'mbi_auto_catalog_fill' );
++				$this->db->log( 'info', 'Compatibilidade v1.4.0 aplicada sem reativar rotinas automáticas.' );
++			}
++			if ( version_compare( $previous_version, '1.4.1', '<' ) ) {
++				$ultra = $this->importer->settings();
++				if ( 'normal' !== (string) ( $ultra['processing_speed'] ?? '' ) ) {
++					$ultra['processing_speed'] = 'ultra';
++				}
++				$ultra['continuous_worker'] = 1;
++				update_option( 'mbi_settings', $ultra, false );
++				$this->ensure_schedules();
++				$this->db->log( 'info', 'v1.4.1 Ultra ativada: navegador como worker auxiliar, capítulos/HTML em paralelo, páginas sem subsizes e reparo reutilizando capítulos completos.' );
++			}
++			if ( version_compare( $previous_version, '1.4.2', '<' ) ) {
++				$this->ensure_schedules();
++				$recovery = $this->importer->recover_queue( true );
++				$this->db->log( 'info', 'v1.4.2 ativada: watchdog e autocura da fila serial habilitados.', $recovery );
++			}
++			if ( version_compare( $previous_version, '1.4.3', '<' ) ) {
++				delete_option( 'mbi_worker_lock' );
++				delete_transient( 'mbi_worker_dispatching' );
++				$this->ensure_schedules();
++				$this->db->log( 'info', 'v1.4.3 ativada: reset atômico, geração de processo e monitor de atividade disponíveis.' );
++			}
++			if ( version_compare( $previous_version, '1.4.4', '<' ) ) {
++				// Apenas marca a recriação de regras para o fim do init. Nenhuma varredura pesada aqui.
++				update_option( 'mbi_flush_rewrite_rules', 1, false );
++				$this->db->log( 'info', 'v1.4.4: estrutura não-hierárquica de capítulos preparada; flush adiado com segurança.' );
++			}
++			if ( version_compare( $previous_version, '1.4.5', '<' ) ) {
++				// Hotfix: remove migração síncrona que podia derrubar o WordPress por timeout/memória.
++				update_option( 'mbi_flush_rewrite_rules', 1, false );
++				$this->db->log( 'info', 'v1.4.5 hotfix ativada: migração pesada removida do carregamento; fila preservada.' );
++			}
++			if ( version_compare( $previous_version, '1.5.0', '<' ) ) {
++				$fast = $this->importer->settings();
++				$fast['page_storage_mode'] = 'remote';
++				$fast['processing_speed'] = 'ultra';
++				$fast['continuous_worker'] = 1;
++				update_option( 'mbi_settings', $fast, false );
++				$result = $this->importer->restart_current_serial_for_remote_pages();
++				$this->db->log( 'info', 'v1.5.0 Fast Pages ativada: páginas passam a usar URLs remotas validadas; a obra atual foi retomada sem downloads locais.', $result );
++			}
++			if ( version_compare( $previous_version, '1.5.1', '<' ) ) {
++				$remote = $this->importer->settings();
++				$remote['page_storage_mode'] = 'remote';
++				$remote['processing_speed'] = 'ultra';
++				$remote['continuous_worker'] = 1;
++				$remote['convert_webp'] = 0;
++				update_option( 'mbi_settings', $remote, false );
++				// Quem vem de <1.5.0 já teve a obra atual reiniciada pelo bloco Fast Pages acima.
++				$result = version_compare( $previous_version, '1.5.0', '<' )
++					? array( 'active' => $this->importer->is_serial_active(), 'reused_fast_pages_restart' => true )
++					: $this->importer->restart_current_serial_for_remote_pages();
++				$this->db->log( 'info', 'v1.5.1 Remote Images ativada: capas e páginas usam somente URLs externas; nenhum novo arquivo de imagem é salvo na Biblioteca de Mídia.', $result );
++			}
++			if ( version_compare( $previous_version, '1.5.2', '<' ) ) {
++				$cleanup = $this->importer->start_legacy_media_cleanup( false );
++				$this->db->log(
++					'warning',
++					'v1.5.2: limpeza segura das imagens antigas do Mangá Bridge iniciada em segundo plano. Somente anexos identificados como pertencentes ao importador serão removidos.',
++					$cleanup
++				);
++			}
++			if ( version_compare( $previous_version, '1.5.3', '<' ) ) {
++				update_option( 'mbi_run_dedupe_upgrade', 1, false );
++				$this->db->log( 'warning', 'v1.5.3 instalada: deduplicação segura agendada para o próximo init, após registrar os tipos de conteúdo.' );
++			}
++			if ( version_compare( $previous_version, '1.5.4', '<' ) ) {
++				update_option( 'mbi_run_validation_upgrade', 1, false );
++				$this->db->log( 'info', 'v1.5.4 instalada: firewall de metadados, quarentena automática e revalidação de obras suspeitas ativados.' );
++			}
++			if ( version_compare( $previous_version, '1.5.5', '<' ) ) {
++				$this->db->log( 'info', 'v1.5.5 instalada: suporte a Cloudflare Image Proxy/CDN com URLs opacas e migração segura disponível. O proxy permanece desativado até a chave ser configurada no painel.' );
++			}
++				if ( version_compare( $previous_version, '1.6.0', '<' ) ) {
++				$reset = $this->importer->stop_all_and_reset();
++				wp_clear_scheduled_hook( 'mbi_daily_sync' );
++				wp_clear_scheduled_hook( 'mbi_updates_sync' );
++				wp_clear_scheduled_hook( 'mbi_auto_catalog_fill' );
++				$manual = $this->importer->settings();
++				$manual['updates_enabled'] = 0;
++				$manual['auto_catalog_enabled'] = 0;
++				$manual['processing_speed'] = 'ultra';
++				$manual['continuous_worker'] = 1;
++				update_option( 'mbi_settings', $manual, false );
++				delete_option( 'mbi_updates_due' );
++				delete_option( 'mbi_suspended_serial_batch' );
++					$this->db->log( 'info', 'v1.6.0 Manual instalada sobre a base 1.5.6: fila anterior zerada, rotinas automáticas desativadas e atualizações passam a exigir seleção do administrador.', $reset );
++				}
++				if ( version_compare( $previous_version, '1.6.1', '<' ) ) {
++					delete_transient( 'mbi_update_scan_lock' );
++					$scan = get_option( 'mbi_update_scan', array() );
++					if ( is_array( $scan ) && ! empty( $scan['active'] ) ) {
++						foreach ( (array) ( $scan['items'] ?? array() ) as $position => $item ) {
++							if ( 'processing' === (string) ( $item['status'] ?? '' ) ) {
++								$scan['items'][ $position ]['status'] = 'pending';
++							}
++						}
++						update_option( 'mbi_update_scan', $scan, false );
++					}
++					$this->db->log( 'info', 'v1.6.1 instalada: detecção manual passa a mostrar cada mangá verificado e preencher a lista de novidades em tempo real.' );
++				}
++				if ( version_compare( $previous_version, '1.6.2', '<' ) ) {
++					$this->db->log( 'info', 'v1.6.2 instalada: importação integral por URL e controle manual de destaques da home disponíveis.' );
++				}
++				if ( version_compare( $previous_version, '1.6.3', '<' ) ) {
++					$recovery = $this->importer->upgrade_large_import_engine();
++					$this->db->log( 'info', 'v1.6.3 instalada: motor de obras grandes otimizado, concorrência adaptativa ativada e capítulos concluídos preservados.', $recovery );
++				}
++				if ( version_compare( $previous_version, '1.6.4', '<' ) ) {
++					$recovery = $this->importer->upgrade_large_import_engine();
++					$this->db->log( 'warning', 'v1.6.4 instalada: jobs de obra presos antes da criação da fila de capítulos são recuperados automaticamente.', $recovery );
++				}
++				if ( version_compare( $previous_version, '1.6.6', '<' ) ) {
++					delete_transient( 'mbi_chapter_network_backoff' );
++					$this->db->log( 'info', 'v1.6.6 instalada: reparo inteligente de URLs de capítulo e tratamento seguro de HTTP 0/404/410 ativados. Falhas existentes aguardam ação manual em “Tentar falhas novamente”.' );
++				}
++				if ( version_compare( $previous_version, '1.6.7', '<' ) ) {
++					$settings = $this->importer->settings();
++					$hosts = preg_split( '/[\r\n,]+/', (string) ( $settings['allowed_hosts'] ?? '' ) );
++					$hosts = array_values( array_unique( array_filter( array_map( static fn( $host ) => strtolower( trim( (string) $host ) ), $hosts ) ) ) );
++					foreach ( array( 'mangalivre.blog', 'www.mangalivre.blog', 'mangalivre.to', 'www.mangalivre.to' ) as $host ) {
++						if ( ! in_array( $host, $hosts, true ) ) {
++							$hosts[] = $host;
++						}
++					}
++					$settings['allowed_hosts'] = implode( "\n", $hosts );
++					update_option( 'mbi_settings', $settings, false );
++					$this->db->log( 'info', 'v1.6.7 instalada: importação manual por URL passa a aceitar mangalivre.to, incluindo capítulos no formato /manga/obra/capitulo-N/.' );
++				}
++				if ( version_compare( $previous_version, '1.6.9', '<' ) ) {
++					$this->db->log( 'info', 'v1.6.9 instalada: extrator de imagens Madara ampliado, placeholders de capa bloqueados, reparo seletivo de capas e auditoria por host do Worker disponíveis.' );
++				}
++				if ( version_compare( $previous_version, '1.6.10', '<' ) ) {
++					$this->db->log( 'info', 'v1.6.10 instalada: diagnóstico do Proxy/CDN ganhou fallback sem admin-ajax para evitar respostas HTML/WAF no teste e na auditoria.' );
++				}
++				if ( version_compare( $previous_version, '1.6.17', '<' ) ) {
++					delete_transient( 'mbi_invalid_cover_count' );
++					$this->db->log( 'info', 'v1.6.17 instalada: capas sem imagem real na origem passam a usar fallback seguro da primeira página válida de capítulo; itens sem solução não são mais contabilizados como reparados.' );
++				}
++				if ( version_compare( $previous_version, '1.6.18', '<' ) ) {
++					delete_transient( 'mbi_update_scan_lock' );
++					delete_transient( 'mbi_update_network_backoff' );
++					$scan = get_option( 'mbi_update_scan', array() );
++					if ( is_array( $scan ) && ! empty( $scan['active'] ) ) {
++						$scan['active'] = false;
++						$scan['current_manga'] = '';
++						$scan['finished_at'] = current_time( 'mysql' );
++						$scan['error'] = 'Varredura antiga interrompida pela atualização do motor rápido v1.6.18.';
++						update_option( 'mbi_update_scan', $scan, false );
++					}
++					$this->db->log( 'info', 'v1.6.18 instalada: detecção de novos capítulos passa a usar janela recente das origens, índice local por source_key e lotes paralelos de até 6 obras; não percorre mais milhares de mangás a cada atualização.' );
++				}
++				if ( version_compare( $previous_version, '1.6.19', '<' ) ) {
++					delete_transient( 'mbi_update_scan_lock' );
++					delete_transient( 'mbi_update_network_backoff' );
++					// Estado da v1.6.18 pode ter ficado incompleto quando o admin-ajax.php devolveu HTML/timeout.
++					// Reinicia somente o detector; capítulos e novidades já salvos permanecem intactos.
++					delete_option( 'mbi_update_scan' );
++					$this->db->log( 'info', 'v1.6.19 instalada: detector passou para transporte admin-post e descoberta incremental da janela recente; o clique inicial não faz mais dezenas de requisições externas nem depende do admin-ajax.php.' );
++				}
++				if ( version_compare( $previous_version, '1.6.20', '<' ) ) {
++					delete_transient( 'mbi_update_scan_lock' );
++					$released = $this->importer->release_stale_activity_markers();
++					$this->db->log( 'info', 'v1.6.20 instalada: estados antigos sem jobs executáveis deixam de bloquear a detecção rápida; somente jobs realmente pendentes/em processamento impedem uma nova leitura.', $released );
++				}
++				if ( version_compare( $previous_version, '1.6.21', '<' ) ) {
++					delete_transient( 'mbi_update_scan_lock' );
++					delete_transient( 'mbi_update_network_backoff' );
++					delete_transient( 'mbi_chapter_network_backoff' );
++					delete_transient( 'mbi_network_pressure' );
++					$serial = $this->importer->serial_state();
++					$manual = $this->importer->manual_update_progress();
++					$migration = $this->db->migrate_active_queue_indexes(
++						! empty( $serial['active'] ) ? (string) ( $serial['id'] ?? '' ) : '',
++						! empty( $manual['active'] ) ? (string) ( $manual['id'] ?? '' ) : ''
++					);
++					$this->db->log(
++						'info',
++						'v1.6.21 Scale Engine instalada: fila indexada por lote/classe, DNS compartilhado, poucas conexões físicas, fallback serial automático e detecção de novidades coexistente com importações grandes.',
++						$migration
++					);
++				}
++				if ( version_compare( $previous_version, '1.6.22', '<' ) ) {
++					$this->db->log(
++						'info',
++						'v1.6.22 instalada: falhas antigas de capítulos sem páginas são retomadas já na etapa de confirmação final, evitando repetir várias leituras que já aconteceram antes da atualização.'
++					);
++				}
++				if ( version_compare( $previous_version, '1.6.23', '<' ) ) {
++					wp_clear_scheduled_hook( 'mbi_prepare_manual_updates' );
++					delete_transient( 'mbi_manual_prepare_lock' );
++					$this->importer->release_stale_activity_markers();
++					$this->importer->recover_orphan_manual_update_batch();
++					$this->db->log( 'info', 'v1.6.23 instalada: publicação de novos capítulos passa a preparar a fila em pequenos lotes assíncronos, eliminando timeout no admin-post.php.' );
++				}
++				if ( version_compare( $previous_version, '1.6.25', '<' ) ) {
++					$requeued = $this->db->retry_transient_starter_failures();
++					if ( $requeued > 0 && ! $this->importer->is_paused() && ! wp_next_scheduled( 'mbi_process_queue' ) ) {
++						wp_schedule_single_event( time() + 2, 'mbi_process_queue' );
++					}
++					$this->db->log(
++						'info',
++						'v1.6.25 instalada: páginas intermediárias do catálogo com 5xx/timeout deixam de derrubar a varredura inteira; falhas starter transitórias antigas foram liberadas para uma última retomada segura.',
++						array( 'starter_requeued' => $requeued )
++					);
++				}
++
++				if ( version_compare( $previous_version, '1.6.26', '<' ) ) {
++					$serial = $this->importer->serial_state();
++					$batch_id = ! empty( $serial['active'] ) ? (string) ( $serial['id'] ?? '' ) : '';
++					$requeued = $this->db->requeue_origin_pressure_failures( $batch_id, 5 * MINUTE_IN_SECONDS );
++					// Evita que a atualização recém-instalada dispare imediatamente outra rajada
++					// contra uma origem que acabou de devolver dezenas de 522.
++					if ( $requeued > 0 ) {
++						set_transient( 'mbi_network_pressure', 1, 5 * MINUTE_IN_SECONDS );
++						set_transient( 'mbi_chapter_network_backoff', 1, 5 * MINUTE_IN_SECONDS );
++					}
++					$this->db->log(
++						'warning',
++						'v1.6.26 Stability Circuit instalada: HTTP 522/52x passa a pausar a origem em vez de gerar cascata de falhas; concorrência reduzida a duas leituras sustentáveis e detector de capítulos também respeita cooldown.',
++						array( 'active_batch' => $batch_id, 'origin_failures_requeued' => $requeued )
++					);
++				}
++
++
++				if ( version_compare( $previous_version, '1.6.27', '<' ) ) {
++					// A descoberta antiga podia ficar vários minutos dentro de um único starter,
++					// bloqueando importação por URL e outras ações. Se só existe starter ativo,
++					// invalida a geração antiga para impedir que um request legado termine depois
++					// da atualização e recrie um lote fantasma.
++					$starter_active = $this->db->active_starter_count();
++					$non_starter = $this->db->active_non_starter_counts();
++					$generation_rotated = 0;
++					if ( $starter_active > 0 && 0 === (int) $non_starter['pending'] && 0 === (int) $non_starter['processing'] && ! $this->importer->is_serial_active() ) {
++						update_option( 'mbi_process_generation', wp_generate_uuid4(), false );
++						update_option( 'mbi_generation_enforced', 1, false );
++						$generation_rotated = 1;
++					}
++					if ( $starter_active > 0 ) {
++						// Um request PHP da versão anterior pode continuar alguns segundos mesmo
++						// após o ZIP ser atualizado. Durante a janela de corte, qualquer lote de
++						// catálogo que não tenha sido criado pelo novo discovery incremental é
++						// considerado fantasma e removido sem apagar conteúdo já gravado.
++						update_option( 'mbi_catalog_cutover_guard_until', time() + HOUR_IN_SECONDS, false );
++					}
++					$cancelled = $this->importer->cancel_catalog_discovery( 'Starter legado interrompido pela v1.6.27 para liberar o painel e converter a busca para modo incremental.' );
++					delete_transient( 'mbi_worker_dispatching' );
++					$this->db->log(
++						'warning',
++						'v1.6.27 instalada: descoberta do catálogo passa a ler uma única página por request, pode ser cancelada isoladamente e não bloqueia importação manual por URL.',
++						array( 'legacy_starters' => $starter_active, 'cancelled_starters' => (int) ( $cancelled['cancelled_jobs'] ?? 0 ), 'generation_rotated' => $generation_rotated )
++					);
++				}
++
++			if ( version_compare( $previous_version, '1.6.28', '<' ) ) {
++				$adjusted = $this->db->migrate_legacy_backoff();
++				$this->db->log( 'info', 'v1.6.28: espera adaptativa e descoberta curta. Posts, capítulos, URLs, pausas e fila foram preservados.', array( 'legacy_waits_adjusted' => $adjusted ) );
++			}
++			if ( version_compare( $previous_version, '1.6.29', '<' ) ) {
++				$recovery = $this->importer->recover_orphan_catalog_discovery();
++				$this->db->log( 'info', 'v1.6.29: parada total agora encerra a descoberta; watchdog de catálogo órfão instalado.', $recovery );
++				if ( ! empty( $recovery['recovered'] ) ) {
++					$this->importer->kick_worker();
++				}
++			}
++			if ( version_compare( $previous_version, '1.6.30', '<' ) ) {
++				$catalog = $this->importer->catalog_discovery_status();
++				if ( ! empty( $catalog['active'] ) && absint( $catalog['page'] ?? 0 ) > 1 ) {
++					$page = (string) absint( $catalog['page'] );
++					$backoffs = is_array( $catalog['page_backoffs'] ?? null ) ? $catalog['page_backoffs'] : array();
++					$backoffs[ $page ] = max( 1, absint( $backoffs[ $page ] ?? 0 ) );
++					$catalog['page_backoffs'] = $backoffs;
++					$catalog['generation'] = (string) get_option( 'mbi_process_generation', '' );
++					update_option( 'mbi_catalog_discovery', $catalog, false );
++				}
++				$this->db->log( 'info', 'v1.6.30: catálogo não fica preso indefinidamente na mesma página após bloqueios consecutivos da origem.' );
++			}
++			if ( version_compare( $previous_version, '1.7.0', '<' ) ) {
++				$migration = $this->importer->migrate_catalog_to_draft_first();
++				$this->db->log(
++					'warning',
++					'v1.7.0: motor rascunhos primeiro ativado; falhas agora são isoladas por obra e não bloqueiam o lote.',
++					$migration
++				);
++			}
++			if ( version_compare( $previous_version, '1.7.22', '<' ) ) {
++				$this->db->log( 'info', 'v1.7.22: fila serial vazia passa a conferir a finalização, registrar bloqueios e avançar preservando conteúdo. A exportação inclui erros e avisos.' );
++			}
++			if ( version_compare( $previous_version, '1.7.21', '<' ) ) {
++				$this->db->log( 'info', 'v1.7.21: publicação, detecção e reparos passam a compartilhar uma trava de recursos; inventário da origem deixa de contar como publicação concluída. Conteúdo e seleção existentes preservados.' );
++			}
++			if ( version_compare( $previous_version, '1.7.23', '<' ) ) {
++				$this->db->log( 'info', 'v1.7.23: importação de novas obras separada da revisão dos rascunhos. Bloqueio antigo de origem só é removido após nova validação bem-sucedida; catálogo e fila preservados na instalação.' );
++			}
++			if ( version_compare( $previous_version, '1.7.24', '<' ) ) {
++				$this->db->log( 'info', 'v1.7.24: timeout de publicação de até 15 s em rodadas de até 22 s, retentativa do mesmo capítulo e fim do encerramento do lote após três falhas de rede. Conteúdo e fila preservados na instalação.' );
++			}
++			if ( version_compare( $previous_version, '1.7.34', '<' ) ) {
++				$this->importer->upgrade_quantity_request();
++				$this->db->log( 'info', 'v1.7.34: pedidos por quantidade repõem candidatas bloqueadas até atingir a meta ou encerrar a busca com saldo explícito.' );
++			}
++			update_option( 'mbi_version', MBI_VERSION, false );
++			if ( version_compare( $previous_version, '1.2.0', '<' ) && ! wp_next_scheduled( 'mbi_rankmath_backfill' ) ) {
++				wp_schedule_single_event( time() + MINUTE_IN_SECONDS, 'mbi_rankmath_backfill' );
++			}
++
++			// Se a atualização foi instalada durante um lote ativo (ex.: reparo da v1.3.8),
++			// preserve a fila e apenas acelere sua retomada com o worker contínuo.
++			if ( $this->importer->is_serial_active() ) {
++				$this->importer->kick_worker();
++			}
++		}
++	}
+ 
+ 	public static function activate(): void {
+ 		$plugin = self::instance();
+-		if ( ! get_option( 'mbi_version', false ) ) { $plugin->db->install(); }
++		$plugin->db->install();
+ 		$plugin->register_content_types();
+ 		flush_rewrite_rules();
+ 

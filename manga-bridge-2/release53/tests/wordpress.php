@@ -4,6 +4,7 @@ function verify53($ok,$message){if(!$ok)throw new RuntimeException($message);ech
 function digest53(){global $wpdb;$data=[];foreach([$wpdb->posts,$wpdb->postmeta,$wpdb->term_relationships,$wpdb->prefix.'mbi_queue'] as $table){$rows=$wpdb->get_results("SELECT * FROM $table",ARRAY_A);usort($rows,fn($a,$b)=>strcmp(wp_json_encode($a),wp_json_encode($b)));$data[$table]=$rows;}return hash('sha256',wp_json_encode($data));}
 $phase=getenv('MBI53_PHASE');
 if($phase==='seed'){
+ verify53(MBI_VERSION==='1.7.52','real 1.7.52 executable baseline active');
  $m=wp_insert_post(['post_type'=>'mbi_manga','post_status'=>'publish','post_title'=>'CI existing work','post_name'=>'ci-preserved-slug'],true);
  $c=wp_insert_post(['post_type'=>'mbi_chapter','post_status'=>'publish','post_parent'=>$m,'post_title'=>'CI existing chapter'],true);
  verify53(is_int($m)&&is_int($c),'published fixtures created');
@@ -13,11 +14,12 @@ if($phase==='seed'){
  mbi()->db->queue('manga',['url'=>'https://mangalivre.blog/manga/ci-preserved/','generation'=>wp_generate_uuid4()]);
  update_option('mbi53_preserved_state',digest53(),false);update_option('mbi53_settings_before',get_option('mbi_settings'),false);update_option('mbi53_serial_before',get_option('mbi_serial_batch'),false);
  update_option('mbi_run_dedupe_upgrade',1,false);update_option('mbi_run_validation_upgrade',1,false);update_option('mbi_version','1.7.52',false);
- echo "Seeded unchanged 1.7.52 schema with published catalogue and pending queue.\n";return;
+ echo "Seeded real 1.7.52 with published catalogue and pending queue.\n";return;
 }
 verify53(hash_equals((string)get_option('mbi53_preserved_state'),digest53()),'catalogue and pending queue preserved');
 verify53(get_option('mbi53_settings_before')===get_option('mbi_settings'),'settings preserved');
 verify53(get_option('mbi53_serial_before')===get_option('mbi_serial_batch'),'active batch preserved');
+if($phase==='rollback'){verify53(MBI_VERSION==='1.7.52' && get_option('mbi_version')==='1.7.52','rollback booted real 1.7.52');}
 if($phase==='verify'){
  verify53(get_option('mbi_version')==='1.7.53','version upgrade completed');
  verify53(!get_option('mbi_run_dedupe_upgrade')&&!get_option('mbi_run_validation_upgrade')&&(int)get_option('mbi_upgrade53')['deferred_legacy_flags']['validation']===1,'historical flags archived without catalogue mutations');

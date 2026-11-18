@@ -32,7 +32,7 @@ final class Job {
             throw new \DomainException('job_not_resumable');
         }
         $job['state'] = $action === 'cancel' ? 'cancelled' : 'queued';
-        if ($action === 'resume') { $job['attempts'] = 0; }
+        if ($action === 'resume') { $job['attempts'] = 0; $job['reason'] = ''; unset($job['github_run_id']); }
         $job['generation'] = $generation; $job['attempt'] = ''; $job['lease_until'] = 0;
         $job['revision']++; $job['updated_at'] = $now; $job['last_event_hash'] = '';
         return $job;

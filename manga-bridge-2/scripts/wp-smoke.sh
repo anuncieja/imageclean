@@ -54,5 +54,8 @@ if [[ -f "$MBI2_CI_PROJECT_DIR/manga-bridge-2/release53/tests/package.py" ]]; th
   wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-preservation.php";'
   wpci plugin activate manga-bridge-importer
   wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-preservation.php";'
-  echo "Combined staging: no catalogue record changed after installing and cycling v1.7.53 alongside control."
+  wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-dispatch.php";'
+  python manga-bridge-2/tests/http_smoke.py
+  wpci eval 'require getenv("MBI2_CI_PROJECT_DIR") . "/manga-bridge-2/tests/wp-preservation.php";'
+  echo "Combined staging: signed HTTP passed with both active and no catalogue record changed."
 fi

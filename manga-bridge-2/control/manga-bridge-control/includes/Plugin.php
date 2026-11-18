@@ -109,7 +109,7 @@ final class Plugin {
         if ($job['state'] === 'running') {
             $next['state'] = $job['attempts'] >= 4 ? 'blocked' : 'waiting_origin';
             $next['reason'] = $job['attempts'] >= 4 ? 'run_budget_exhausted' : 'executor_lease_expired';
-        } elseif ($job['state'] === 'queued' && $job['reason'] === 'github_dispatched') {
+        } elseif ($job['state'] === 'dispatching' || ($job['state'] === 'queued' && $job['reason'] === 'github_dispatched')) {
             $next['state'] = 'blocked'; $next['reason'] = 'workflow_not_claimed';
         } else { return; }
         $next['revision']++; $next['lease_until'] = 0; $next['updated_at'] = time();
@@ -150,6 +150,7 @@ final class Plugin {
         if (!self::enabled()) { return; }
         $job = Store::read($id);
         if (!$job || !in_array($job['state'], ['queued', 'waiting_origin'], true)) { return; }
+        if ($job['state'] === 'queued' && $job['reason'] === 'github_dispatched') { return; }
         if ($job['attempts'] >= 4) { $next = $job; $next['state'] = 'blocked'; $next['reason'] = 'run_budget_exhausted'; $next['revision']++; Store::swap($job, $next); return; }
         if (!defined('MBI2_GITHUB_TOKEN') || !defined('MBI2_WORKFLOW_REGISTERED') || MBI2_WORKFLOW_REGISTERED !== true) {
             $next = $job; $next['state'] = 'blocked'; $next['reason'] = 'github_configuration_required'; $next['revision']++;
@@ -157,22 +158,26 @@ final class Plugin {
         }
         $next = $job; $next['state'] = 'dispatching'; $next['revision']++; $next['updated_at'] = time();
         if (!Store::swap($job, $next)) { return; }
+        // Install the watchdog before the HTTP call; interrupted dispatches also expire.
+        $args = [$next['id'], $next['generation'], $next['attempt']];
+        if (!wp_next_scheduled('mbi2_watchdog', $args)) {
+            wp_schedule_single_event(time() + 300, 'mbi2_watchdog', $args);
+        }
         $response = wp_remote_post('https://api.github.com/repos/anuncieja/imageclean/actions/workflows/manga-bridge-executor.yml/dispatches', [
             'timeout' => 10, 'redirection' => 0,
             'headers' => ['Authorization' => 'Bearer ' . MBI2_GITHUB_TOKEN, 'Accept' => 'application/vnd.github+json', 'X-GitHub-Api-Version' => '2022-11-28', 'Content-Type' => 'application/json'],
-            'body' => wp_json_encode(['ref' => 'manga-bridge-2-transport', 'inputs' => ['job_id' => $id]])
+            'body' => wp_json_encode(['ref' => 'manga-bridge-2-transport', 'inputs' => ['job_id' => $id], 'return_run_details' => true])
         ]);
         $latest = Store::read($id);
         if (!$latest || $latest['generation'] !== $job['generation'] || $latest['state'] !== 'dispatching') { return; }
         $code = is_wp_error($response) ? 0 : wp_remote_retrieve_response_code($response);
-        $done = $latest; $done['state'] = $code === 204 ? 'queued' : 'blocked';
-        $done['reason'] = $code === 204 ? 'github_dispatched' : 'github_dispatch_failed'; $done['revision']++;
-        if (Store::swap($latest, $done) && $code === 204) {
-            $args = [$done['id'], $done['generation'], $done['attempt']];
-            if (!wp_next_scheduled('mbi2_watchdog', $args)) {
-                wp_schedule_single_event(time() + 300, 'mbi2_watchdog', $args);
-            }
-        }
+        $result = $code === 200 ? json_decode(wp_remote_retrieve_body($response), true) : null;
+        $run_id = is_array($result) ? ($result['workflow_run_id'] ?? 0) : 0;
+        $accepted = $code === 204 || ($code === 200 && is_int($run_id) && $run_id > 0);
+        $done = $latest; $done['state'] = $accepted ? 'queued' : 'blocked';
+        $done['reason'] = $accepted ? 'github_dispatched' : 'github_dispatch_failed'; $done['revision']++;
+        if ($accepted && is_int($run_id) && $run_id > 0) { $done['github_run_id'] = $run_id; }
+        Store::swap($latest, $done);
         // No automatic retry after an ambiguous dispatch: avoid duplicate paid runs.
     }
 }
