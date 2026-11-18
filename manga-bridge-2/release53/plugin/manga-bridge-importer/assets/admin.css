@@ -1,0 +1,422 @@
+.mbi-wrap {
+	max-width: 1480px;
+}
+
+.mbi-version {
+	display: inline-block;
+	margin-left: 8px;
+	padding: 4px 8px;
+	border-radius: 999px;
+	background: #ede9fe;
+	color: #5b21b6;
+	font-size: 12px;
+	vertical-align: middle;
+}
+
+.mbi-grid {
+	display: grid;
+	gap: 16px;
+}
+
+.mbi-stats {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	margin: 22px 0;
+}
+
+.mbi-stat,
+.mbi-panel {
+	box-sizing: border-box;
+	border: 1px solid #dcdcde;
+	border-radius: 10px;
+	background: #fff;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+}
+
+.mbi-stat {
+	padding: 18px 20px;
+	border-top: 4px solid #8c8f94;
+}
+
+.mbi-stat span {
+	display: block;
+	color: #646970;
+	font-size: 13px;
+	font-weight: 600;
+	text-transform: uppercase;
+}
+
+.mbi-stat strong {
+	display: block;
+	margin-top: 6px;
+	font-size: 28px;
+	line-height: 1;
+}
+
+.mbi-stat-pending { border-top-color: #dba617; }
+.mbi-stat-processing { border-top-color: #2271b1; }
+.mbi-stat-completed { border-top-color: #00a32a; }
+.mbi-stat-failed { border-top-color: #d63638; }
+
+.mbi-progress-panel {
+	position: relative;
+	overflow: hidden;
+	border-top: 4px solid #2271b1;
+}
+
+.mbi-progress-head,
+.mbi-progress-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 20px;
+}
+
+.mbi-progress-head h2 {
+	margin: 4px 0 0;
+	font-size: 22px;
+}
+
+.mbi-progress-head > strong {
+	font-size: 32px;
+	font-variant-numeric: tabular-nums;
+}
+
+.mbi-progress-status {
+	color: #2271b1;
+	font-size: 11px;
+	font-weight: 800;
+	letter-spacing: .08em;
+}
+
+.mbi-progress-track {
+	height: 16px;
+	overflow: hidden;
+	margin: 18px 0 12px;
+	border-radius: 999px;
+	background: #e7e8ea;
+}
+
+.mbi-progress-track span {
+	display: block;
+	height: 100%;
+	min-width: 0;
+	border-radius: inherit;
+	background: linear-gradient(90deg, #2271b1, #72aee6);
+	transition: width .45s ease;
+}
+
+.mbi-state-running .mbi-progress-track span {
+	min-width: 3%;
+	background-image: linear-gradient(135deg, rgba(255,255,255,.2) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.2) 50%, rgba(255,255,255,.2) 75%, transparent 75%, transparent), linear-gradient(90deg, #2271b1, #72aee6);
+	background-size: 28px 28px, 100% 100%;
+	animation: mbi-progress-stripes 1s linear infinite;
+}
+
+.mbi-progress-message {
+	margin: 0 0 18px;
+	color: #50575e;
+}
+
+.mbi-progress-facts {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.mbi-progress-facts div {
+	padding: 13px 15px;
+	border: 1px solid #e2e4e7;
+	border-radius: 8px;
+	background: #f6f7f7;
+}
+
+.mbi-progress-facts span {
+	display: block;
+	margin-bottom: 4px;
+	color: #646970;
+	font-size: 12px;
+}
+
+.mbi-progress-facts strong {
+	font-size: 20px;
+	font-variant-numeric: tabular-nums;
+}
+
+.mbi-progress-facts b { font-weight: inherit; }
+
+.mbi-progress-footer {
+	margin-top: 14px;
+	color: #646970;
+	font-size: 12px;
+}
+
+.mbi-state-completed { border-top-color: #00a32a; }
+.mbi-state-completed .mbi-progress-status { color: #008a20; }
+.mbi-state-completed .mbi-progress-track span { background: #00a32a; }
+.mbi-state-warning { border-top-color: #dba617; }
+.mbi-state-warning .mbi-progress-status { color: #8a6500; }
+.mbi-state-warning .mbi-progress-track span { background: #dba617; }
+.mbi-state-failed { border-top-color: #d63638; }
+.mbi-state-failed .mbi-progress-status { color: #b32d2e; }
+.mbi-state-failed .mbi-progress-track span { background: #d63638; }
+
+@keyframes mbi-progress-stripes {
+	from { background-position: 0 0, 0 0; }
+	to { background-position: 28px 0, 0 0; }
+}
+
+.mbi-panel {
+	margin: 18px 0;
+	padding: 20px;
+}
+
+.mbi-panel h2 {
+	margin-top: 0;
+}
+
+.mbi-columns {
+	display: grid;
+	grid-template-columns: minmax(0, 1.35fr) minmax(360px, .65fr);
+	gap: 18px;
+}
+
+.mbi-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	align-items: center;
+	margin-top: 16px;
+}
+
+.mbi-actions form {
+	margin: 0;
+}
+
+.mbi-manual-url-form label {
+	display: block;
+	margin-bottom: 8px;
+}
+
+.mbi-manual-url-row {
+	display: flex;
+	align-items: stretch;
+	gap: 10px;
+}
+
+.mbi-manual-url-row input[type="url"] {
+	width: min(720px, 100%);
+	min-height: 46px;
+}
+
+.column-mbi_featured {
+	width: 150px;
+}
+
+.mbi-featured-form {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	margin: 0;
+}
+
+.mbi-featured-form .button {
+	margin: 0;
+}
+
+.mbi-featured-add {
+	font-weight: 700;
+	text-transform: uppercase;
+}
+
+.mbi-featured-status {
+	display: inline-block;
+	padding: 4px 8px;
+	border-radius: 999px;
+	background: #dbeafe;
+	color: #135e96;
+	font-size: 11px;
+	font-weight: 800;
+	line-height: 1.4;
+	text-transform: uppercase;
+}
+
+.mbi-featured-remove {
+	color: #b32d2e !important;
+}
+
+.mbi-featured-unavailable {
+	color: #787c82;
+	font-size: 12px;
+}
+
+.mbi-muted {
+	margin-bottom: 0;
+	color: #646970;
+	font-size: 12px;
+}
+
+.mbi-badge {
+	display: inline-block;
+	padding: 2px 7px;
+	border-radius: 999px;
+	background: #f0f0f1;
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1.5;
+	text-transform: uppercase;
+}
+
+.mbi-pending,
+.mbi-warning { background: #fcf0c8; color: #6e4b00; }
+.mbi-processing,
+.mbi-info { background: #dbeafe; color: #1e40af; }
+.mbi-completed,
+.mbi-success { background: #dcfce7; color: #166534; }
+.mbi-failed,
+.mbi-error { background: #fee2e2; color: #991b1b; }
+
+.mbi-url {
+	max-width: 420px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.mbi-table-scroll {
+	overflow-x: auto;
+}
+
+.mbi-check {
+	margin-right: 6px;
+}
+
+.mbi-check.ok { color: #00a32a; }
+.mbi-check.bad { color: #d63638; }
+
+.mbi-diagnostics th {
+	width: 42%;
+}
+
+.mbi-log-list {
+	max-height: 360px;
+	overflow: auto;
+	margin-top: 16px;
+}
+
+.mbi-log-list p {
+	margin: 0;
+	padding: 9px 0;
+	border-bottom: 1px solid #f0f0f1;
+}
+
+.mbi-update-group {
+	margin: 18px 0;
+	padding: 16px;
+	border: 1px solid #dcdcde;
+	border-radius: 10px;
+	background: #f6f7f7;
+}
+
+.mbi-update-group > header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	margin-bottom: 12px;
+}
+
+.mbi-update-group > header strong,
+.mbi-update-group > header span {
+	display: block;
+}
+
+.mbi-update-group > header strong { font-size: 16px; }
+.mbi-update-group > header span { margin-top: 3px; color: #646970; }
+
+.mbi-section-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 18px;
+	margin-bottom: 14px;
+}
+
+.mbi-section-head h2 { margin-bottom: 5px; }
+.mbi-section-head p { margin: 0; color: #646970; }
+
+.mbi-scan-facts {
+	grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.mbi-scan-list-wrap {
+	margin-top: 18px;
+	padding-top: 16px;
+	border-top: 1px solid #dcdcde;
+}
+
+.mbi-scan-list-wrap h3 { margin: 0 0 10px; }
+
+.mbi-scan-table tbody {
+	display: table-row-group;
+}
+
+.mbi-scan-table tbody tr {
+	transition: background-color .2s ease;
+}
+
+.mbi-scan-table td:nth-child(1) { width: 42px; }
+.mbi-scan-table td:nth-child(3) { width: 210px; }
+.mbi-scan-table td:nth-child(4) { min-width: 190px; }
+.mbi-scan-table td:nth-child(5) { width: 150px; }
+
+.mbi-scan-pending { background: #f0f0f1; color: #50575e; }
+.mbi-scan-processing { background: #dbeafe; color: #1e40af; }
+.mbi-scan-clean { background: #ecfdf3; color: #166534; }
+.mbi-scan-has_updates { background: #dcfce7; color: #006b2d; }
+.mbi-scan-error { background: #fee2e2; color: #991b1b; }
+
+small.mbi-scan-error {
+	display: block;
+	margin-top: 5px;
+	background: transparent;
+	font-size: 11px;
+}
+
+.mbi-log-context {
+	max-width: 760px;
+	max-height: 240px;
+	overflow: auto;
+	padding: 10px;
+	background: #f0f0f1;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+@media (max-width: 960px) {
+	.mbi-stats,
+	.mbi-columns,
+	.mbi-progress-facts,
+	.mbi-scan-facts {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+@media (max-width: 600px) {
+	.mbi-stats,
+	.mbi-columns,
+	.mbi-progress-facts,
+	.mbi-scan-facts {
+		grid-template-columns: 1fr;
+	}
+	.mbi-progress-head,
+	.mbi-progress-footer { align-items: flex-start; flex-direction: column; gap: 8px; }
+	.mbi-section-head { flex-direction: column; }
+	.mbi-manual-url-row { align-items: stretch; flex-direction: column; }
+}
+
+.mbi-runtime{margin:10px 0 2px;padding:9px 12px;background:#f6f7f7;border-left:3px solid #2271b1;font-size:13px}.mbi-runtime small{color:#646970}
+
+/* v1.7.37: distinguir listas parciais de erros e de verificações completas. */
+.mbi-scan-partial, .mbi-scan-partial_updates { background:#fff7ed; color:#9a3412; }
+small.mbi-scan-note { display:block; color:#9a3412; font-size:11px; line-height:1.45; margin-top:4px; }

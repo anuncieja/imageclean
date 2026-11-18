@@ -1,0 +1,61 @@
+name: Manga Bridge Importer 1.7.53 validation
+on:
+  push:
+    branches: [manga-bridge-1-7-53]
+    paths: ['manga-bridge-2/release53/**', '.github/workflows/manga-bridge-importer-53.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mbi53-ci
+  cancel-in-progress: true
+jobs:
+  importer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: mbi53_ci
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 'yes'
+        ports: ['127.0.0.1:3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mysqli, mbstring, dom, openssl
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Syntax and controlled regression tests
+        run: |
+          set -eu
+          export MBI_PLUGIN_ROOT="$GITHUB_WORKSPACE/manga-bridge-2/release53/plugin/manga-bridge-importer"
+          find manga-bridge-2/release53 -name '*.php' -print0 | xargs -0 -n1 php -l
+          find "$MBI_PLUGIN_ROOT/assets" -name '*.js' -print0 | xargs -0 -n1 node --check
+          for fixture in collection-inventory continuation daily db network quantity queue selection validation stream; do
+            php "manga-bridge-2/release53/tests/$fixture.php"
+          done
+      - name: Build CI installation package
+        run: python manga-bridge-2/release53/tests/package.py
+      - name: WordPress upgrade and catalogue preservation
+        env:
+          MBI53_CI_DB_PASSWORD: ''
+        run: bash manga-bridge-2/release53/tests/wp-smoke.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manga-bridge-importer-53-ci
+          path: manga-bridge-2/release53/dist
+          retention-days: 3
+          if-no-files-found: error

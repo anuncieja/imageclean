@@ -4,13 +4,13 @@ on:
     branches: [manga-bridge-2, manga-bridge-2-transport]
     paths: ['manga-bridge-2/**', '.github/workflows/manga-bridge-*.yml']
   pull_request:
-    branches: [manga-bridge-2]
+    branches: [manga-bridge-2, manga-bridge-2-transport]
     paths: ['manga-bridge-2/**', '.github/workflows/manga-bridge-*.yml']
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: mbi2-ci-${{ github.event.pull_request.head.ref || github.ref_name }}
+  group: mbi2-ci-${{ github.event.pull_request.head.ref || github.ref_name }}-${{ github.event.pull_request.head.ref == 'manga-bridge-1-7-53' && github.event.pull_request.head.sha || 'standard' }}
   cancel-in-progress: true
 jobs:
   isolated:
@@ -36,7 +36,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: mysqli, mbstring, openssl
+          extensions: mysqli, mbstring, dom, openssl
           coverage: none
       - name: Syntax and contract tests
         env:
