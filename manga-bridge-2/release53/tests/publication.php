@@ -63,6 +63,9 @@ function queue_rounds(MBI_Importer $importer, callable $done): void {
 }
 queue_rounds($importer, static fn()=>empty($importer->serial_state()['active']));
 $ids=fixture_ids('mbi_manga',$work);
+if (!$ids || get_post_status($ids[0])!=='publish') {
+    echo 'Import failure fixture: '.wp_json_encode(['serial'=>$importer->serial_state(),'requests'=>$requests,'counts'=>mbi()->db->counts(),'logs'=>mbi()->db->recent_logs(8)],JSON_UNESCAPED_UNICODE)."\n";
+}
 publish_check(count($ids)===1 && get_post_status($ids[0])==='publish','manual import published one validated manga');
 $parent=(int)$ids[0];
 $chapter_ids=fixture_ids('mbi_chapter',$chapter);
@@ -71,7 +74,7 @@ publish_check(count($chapter_ids)===1 && get_post_status($chapter_ids[0])==='pub
 publish_check((int)$importer->serial_state()['completed']===1,'quota counted one actual publication');
 publish_check(count(array_filter($requests,static fn($url)=>$url===$page))===1,'chapter image was fetched exactly once');
 $key=md5($next);
-update_option('mbi_detected_updates',[$key=>['manga_id'=>$parent,'manga_title'=>'CI Serial Manga','manga_url'=>$work,'chapter_url'=>$next,'chapter_number'=>'2']],false);
+update_option('mbi_detected_updates',[$key=>['manga_id'=>$parent,'manga_name'=>'CI Serial Manga','manga_url'=>$work,'chapter_url'=>$next,'chapter_number'=>'2']],false);
 do_action('mbi_process_queue');
 publish_check(!fixture_ids('mbi_chapter',$next),'detected chapter does not publish without explicit selection');
 $manual=$importer->enqueue_detected_updates([$key]);
