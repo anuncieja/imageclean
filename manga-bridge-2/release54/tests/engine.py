@@ -54,9 +54,15 @@ class FixtureHTTP:
             return json.dumps({"total": 2, "offset": 2, "list": link(2)}).encode()
         if not image and url in urls:
             chapter = urls.index(url) + 1
-            count = 3 if chapter == 2 and data["scenario"] == "incomplete" else chapter
-            images = f'<img data-src="{page}">' + (f'<img src="{second}">' if chapter == 2 else "")
-            return f'<meta property="og:title" content="CI Capítulo {chapter}"><div class="reading-content" data-page-count="{count}">{images}</div>'.encode()
+            label = f'<meta property="og:title" content="CI Capítulo {chapter}">'
+            if chapter == 1:
+                return (label + f'<div class="reading-content" data-page-count="1"><img data-src="{page}"></div>').encode()
+            count = 3 if data["scenario"] == "incomplete" else 2
+            def numbered(n, image):
+                return (f'<div class="chapter-image-container" data-page="{n}">'
+                        f'<img class="chapter-image" data-src="{image}"><span class="page-number">{n}/{count}</span></div>')
+            # Reorder the wrappers to prove pages follow source numbering instead of DOM position.
+            return (label + '<div class="chapter-content">' + numbered(2, second) + numbered(1, page) + '</div>').encode()
         raise AssertionError("Unexpected network request")
 
 class CountingClient(Client):

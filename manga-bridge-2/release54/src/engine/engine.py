@@ -245,7 +245,41 @@ class SafeHTTP:
         finally:
             conn.close()
 
-def publication_chapter(doc, url, pages):
+def numbered_reader_pages(doc, url):
+    """Read the numbered SlimeRead layout also recognized by the local importer."""
+    wrappers = [node for node in doc.nodes if "chapter-image-container" in doc.classes(node)
+                and "data-page" in node["attrs"]]
+    if not wrappers:
+        return []
+    by_wrapper = {id(node): ([], []) for node in wrappers}
+    for node in doc.nodes:
+        if node["tag"] == "img" and "chapter-image" in doc.classes(node):
+            kind = 0
+        elif "page-number" in doc.classes(node):
+            kind = 1
+        else:
+            continue
+        for parent in node["parents"]:
+            if id(parent) in by_wrapper:
+                by_wrapper[id(parent)][kind].append(node)
+    result, declared = {}, 0
+    for wrapper in wrappers:
+        label = wrapper["attrs"]["data-page"]
+        imgs, counters = by_wrapper[id(wrapper)]
+        if not re.fullmatch(r"[1-9][0-9]{0,2}", label or "") or len(imgs) != 1 or len(counters) != 1:
+            raise Blocked("unproven_reader_page_count")
+        count = re.fullmatch(r"([1-9][0-9]{0,2})\s*/\s*([1-9][0-9]{0,2})", clean(counters[0]["text"]))
+        idx = int(label)
+        if not count or int(count[1]) != idx or idx in result or (declared and declared != int(count[2])):
+            raise Blocked("unproven_reader_page_count")
+        declared = int(count[2])
+        result[idx] = image_url(imgs[0], url)
+    if sorted(result) != list(range(1, declared + 1)) or len(set(result.values())) != declared:
+        raise Blocked("unproven_reader_page_count")
+    return [result[idx] for idx in range(1, declared + 1)]
+
+
+def publication_chapter(doc, url, pages, numbered=False):
     # Publication requires a source-declared page count, not just the links
     # we happened to see. The analysis-only mode remains more permissive.
     counts = []
@@ -255,7 +289,7 @@ def publication_chapter(doc, url, pages):
     meta = doc.meta("manga:page_count")
     if meta:
         counts.append(meta)
-    if not counts or any(not re.fullmatch(r"[1-9][0-9]{0,2}", n) or int(n) != len(pages) for n in counts):
+    if (not counts and not numbered) or any(not re.fullmatch(r"[1-9][0-9]{0,2}", n) or int(n) != len(pages) for n in counts):
         raise Blocked("unproven_reader_page_count")
     label = doc.meta("og:title") or next((clean(n["text"]) for n in doc.nodes if n["tag"] == "h1"), "")
     number = chapter_number(label, url)
@@ -310,8 +344,9 @@ def collect_work(url, http, checkpoint=None, progress=None, publication=False):
             if chapter_url in completed:
                 continue
             doc = Document(http.get(chapter_url).decode("utf-8", "replace"))
-            pages = []
-            for node in doc.nodes:
+            numbered = numbered_reader_pages(doc, chapter_url) if publication else []
+            pages = list(numbered)
+            for node in doc.nodes if not numbered else []:
                 if node["tag"] == "img" and (doc.in_class(node, {"reading-content", "reader-pages", "chapter-content", "page-break"}) or doc.classes(node) & {"reader-page", "chapter-page"}):
                     candidate = image_url(node, chapter_url)
                     if candidate not in pages:
@@ -320,7 +355,7 @@ def collect_work(url, http, checkpoint=None, progress=None, publication=False):
                 raise Blocked("no_reader_images")
             if publication and len(pages) > 100:
                 raise Blocked("pilot_chapter_page_limit")
-            extra = publication_chapter(doc, chapter_url, pages) if publication else {}
+            extra = publication_chapter(doc, chapter_url, pages, bool(numbered)) if publication else {}
             if extra and any(c.get("number") == extra["number"] for c in state["chapters"]):
                 raise Blocked("duplicate_chapter_number")
             for page in pages:
