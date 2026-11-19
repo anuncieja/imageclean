@@ -1,0 +1,35 @@
+name: Manga Bridge — Lotes no Ler Mangá Online
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        required: true
+        description: UUID do lote
+        type: string
+      generation:
+        required: true
+        description: UUID da rodada
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: manga-bridge-batches
+  cancel-in-progress: false
+jobs:
+  collect:
+    if: github.repository == 'anuncieja/imageclean' && github.ref == 'refs/heads/main'
+    environment: manga-bridge-production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Executar a rodada de importação
+        env:
+          MBI2_JOB_ID: ${{ inputs.job_id }}
+          MBI2_GENERATION: ${{ inputs.generation }}
+          MBI2_WORDPRESS_ENDPOINT: https://lermangaonline.com.br/wp-json/mbi2/v1
+          MBI2_HMAC_KEY_B64: ${{ secrets.MBI2_HMAC_KEY_B64 }}
+          MBI2_ALLOWED_MEDIA_HOSTS: ${{ vars.MBI2_ALLOWED_MEDIA_HOSTS }}
+        run: python3 manga-bridge-2/release55/src/engine/batch.py
