@@ -3,6 +3,8 @@ on:
   push:
     branches: [manga-bridge-modelo-final]
     paths: ['manga-bridge-2/release54/**', '.github/workflows/manga-bridge-release54-ci.yml']
+  pull_request:
+    paths: ['manga-bridge-2/release54/**', '.github/workflows/manga-bridge-release54-ci.yml']
   workflow_dispatch:
 permissions:
   contents: read
