@@ -235,7 +235,12 @@ final class Publisher {
                     }
                 }
             }
-            foreach ($children as $id) { self::status($id,'publish'); }
+            $released=0;
+            foreach ($children as $id) {
+                if (get_post_status($id)==='publish') { continue; }
+                if ($prepared!==null && $released && \MBI_Resource_Guard::remaining()<3) { return 0; }
+                self::status($id,'publish'); $released++;
+            }
             self::meta($manga,['_mbi_ready'=>1]);
             self::status($manga,'publish');
         } catch (\Throwable $e) {

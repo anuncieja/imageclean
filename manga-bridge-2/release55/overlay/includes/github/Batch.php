@@ -64,7 +64,7 @@ final class Batch {
                 return $job? self::response(self::view($job,true)) : new \WP_Error('mbi2_batch_missing','Lote inexistente.',['status'=>404]);
             }]);
         register_rest_route('mbi2/v1',$base.'/events',['methods'=>'POST','permission_callback'=>[self::class,'auth'],
-            'callback'=>[self::class,'event']);
+            'callback'=>[self::class,'event']]);
     }
     private static function response(array $body): \WP_REST_Response {
         $response=new \WP_REST_Response($body);
@@ -85,18 +85,18 @@ final class Batch {
         $after['revision']=$before['revision']+1;
         return Store::swap($before,$after);
     }
-    private static function report(array &$job, string $code): void {
-        $job['reports'][]=['code'=>$code,'at'=>time()];
+    private static function report(array &$job, string $code, string $candidate = ''): void {
+        $job['reports'][]=['code'=>$code,'candidate'=>$candidate,'at'=>time()];
         $job['reports']=array_slice($job['reports'],-15);
     }
     private static function shift(array &$job, string $failure = ''): void {
-        array_shift($job['queue']); $job['checkpoint']=[]; $job['pending']=[]; $job['prepared']=[];
+        $candidate=array_shift($job['queue']); $job['checkpoint']=[]; $job['pending']=[]; $job['prepared']=[];
         $job['failures']=0; $job['write_failures']=0;
-        if ($failure!=='') { $job['rejected']++; self::report($job,$failure); }
+        if ($failure!=='') { $job['rejected']++; self::report($job,$failure,(string)$candidate); }
         if ($job['published']>=$job['target']) {
             $job['state']='published'; $job['queue']=[]; $job['seen']=[]; $job['reason']='target_met';
         } elseif (!$job['queue'] && $job['exhausted']) {
-            $job['state']='blocked'; $job['reason']='catalogue_exhausted';
+            $job['state']='blocked'; $job['reason']='catalogue_exhausted'; $job['seen']=[];
         }
     }
     private static function page(array &$job, array $event): void {
@@ -121,7 +121,7 @@ final class Batch {
         if ($job['page']>=$job['page_limit'] && $event['more']) { self::report($job,'page_budget_reached'); }
         $job['page']++;
         $job['failures']=0;
-        if (!$job['queue'] && $job['exhausted']) { $job['state']='blocked'; $job['reason']='catalogue_exhausted'; }
+        if (!$job['queue'] && $job['exhausted']) { $job['state']='blocked'; $job['reason']='catalogue_exhausted'; $job['seen']=[]; }
     }
     private static function blob($value): array {
         if (!is_array($value) || strlen(wp_json_encode($value,JSON_THROW_ON_ERROR))>self::BLOB) {
@@ -340,6 +340,19 @@ final class Batch {
         finally { if ($ticket) { Store::finish($ticket,true); } }
         wp_safe_redirect(admin_url(self::PAGE.'&batch='.$id)); exit;
     }
+    private static function reason(string $code): string {
+        $labels=[
+            'missing_real_cover'=>'A origem não forneceu uma capa válida.',
+            'unproven_reader_page_count'=>'Não foi possível confirmar todas as páginas de um capítulo.',
+            'work_chapter_limit'=>'Obra acima de 120 capítulos.',
+            'work_image_limit'=>'Obra acima de 2.400 imagens distintas.',
+            'work_payload_limit'=>'A lista comprovada ultrapassou o limite de dados da obra.',
+            'page_budget_reached'=>'Foi atingido o limite de páginas configurado para este lote.',
+            'origin_retry_exhausted'=>'A origem falhou repetidamente para esta candidata.',
+            'existing_catalogue_record_preserved'=>'O WordPress preservou um registro existente.'
+        ];
+        return $labels[$code]??$code;
+    }
     private static function summary(array $job): array {
         $labels=['queued'=>'Aguardando rodada','dispatching'=>'Iniciando GitHub Actions','running'=>'Coletando e validando na origem',
             'received'=>'Obra validada; aguardando WordPress','publishing'=>'Gravando uma obra','blocked'=>'Encerrado com vagas',
@@ -387,7 +400,11 @@ final class Batch {
             }
             if ($job['reports']) {
                 echo '<details><summary>Ocorrências recentes</summary><ul>';
-                foreach (array_reverse($job['reports']) as $row) { echo '<li>'.esc_html($row['code']).'</li>'; }
+                foreach (array_reverse($job['reports']) as $row) {
+                    $candidate=$row['candidate']??'';
+                    echo '<li>'.($candidate!==''?'<code>'.esc_html(basename(rtrim($candidate,'/'))).'</code>: ':'').
+                        esc_html(self::reason($row['code'])).'</li>';
+                }
                 echo '</ul></details>';
             }
         }
