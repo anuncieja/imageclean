@@ -1,0 +1,39 @@
+name: Manga Bridge 1.7.54 — integração WordPress/GitHub
+on:
+  push:
+    branches: [manga-bridge-modelo-final]
+    paths: ['manga-bridge-2/release54/**', '.github/workflows/manga-bridge-release54-ci.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  wordpress:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: local-ci-only-54
+          MARIADB_DATABASE: mbi54_ci
+        ports: ['3306:3306']
+        options: --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 5s --health-timeout 3s --health-retries 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 3c31f2c65d032990bea27756d67e6f31bf9d67a5
+          path: base-testada
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mysqli, mbstring, dom, curl, zip
+          tools: wp-cli
+          coverage: none
+      - name: Testar upgrade, coleta externa, publicação e rollback
+        env:
+          MBI54_DB_PASSWORD: local-ci-only-54
+        run: bash manga-bridge-2/release54/tests/wordpress.sh
