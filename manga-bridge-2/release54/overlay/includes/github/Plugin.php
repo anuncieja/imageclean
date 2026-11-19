@@ -131,8 +131,8 @@ final class Plugin {
             'wordpress_confirmed_published'=>'O WordPress confirmou que a obra está publicada.'];
         return ['state'=>$state,'active'=>!$terminal,'label'=>$labels[$state]??$state,
             'reason'=>$reasons[$job['reason']]??$job['reason'],
-            'chapters'=>count($job['checkpoint']['chapters']??[]),
-            'total'=>(int)($job['checkpoint']['work']['expected_chapters']??0),
+            'chapters'=>(int)($job['observed_chapters']??count($job['checkpoint']['chapters']??[])),
+            'total'=>(int)($job['expected_chapters']??$job['checkpoint']['work']['expected_chapters']??0),
             'published'=>(int)$job['published'], 'post_id'=>(int)($job['post_id']??0),
             'run_id'=>(int)($job['github_run_id']??0)];
     }
@@ -279,6 +279,9 @@ final class Plugin {
                 $manifest=Publisher::manifest($next,$next['checkpoint']);
                 $postId=Publisher::publish($next,$manifest);
                 $done['state']='published'; $done['published']=1; $done['post_id']=$postId; $done['reason']='wordpress_confirmed_published';
+                $done['observed_chapters']=count($manifest['chapters']);
+                $done['expected_chapters']=$done['observed_chapters'];
+                $done['checkpoint']=[]; // Proofs remain in chapter receipts; no permanent per-image job payload.
             } catch (\DomainException | \InvalidArgumentException $e) {
                 $done['state']='blocked'; $done['reason']=$e->getMessage();
             } catch (\Throwable $e) {

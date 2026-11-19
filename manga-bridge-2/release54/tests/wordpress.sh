@@ -58,6 +58,7 @@ for kind in success duplicate incomplete wrong_generation resume; do
     export MBI54_PHASE="check_$kind"
     wp54 eval-file "$MBI54_ROOT/tests/wordpress.php"
 done
+wp54 eval-file "$MBI54_ROOT/tests/legacy-publication.php"
 unset MBI54_ENABLE
 wp54 --skip-plugins=manga-bridge-importer plugin install "$task_build/base.zip" --force
 export MBI54_PHASE=rollback

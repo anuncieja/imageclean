@@ -106,6 +106,7 @@ if ($mode==='check_duplicate') {
     return;
 }
 pass54($job['state']==='published' && $job['published']===1 && !$before && count($works)===1 && (int)$works[0]===$job['post_id'],'GitHub collector caused one authenticated WordPress publication');
+pass54($job['checkpoint']===[] && $job['observed_chapters']===2,'publication compacts the stored job without losing progress');
 foreach ([1,2] as $n) {
     $chapter=$find('mbi_chapter','https://mangalivre.blog/capitulo/'.$d['slug'].'-'.$n.'/');
     pass54(count($chapter)===1 && get_post_status($chapter[0])==='publish' &&
