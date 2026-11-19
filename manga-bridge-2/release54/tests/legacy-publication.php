@@ -42,6 +42,9 @@ add_filter('pre_http_request', static function ($pre,$args,$url) use (&$requests
     } else {
         throw new RuntimeException('Unexpected outbound HTTP: '.wp_parse_url($url,PHP_URL_HOST));
     }
+    if ($mime==='text/html') {
+        $body='<!doctype html><html><head><meta charset="utf-8"><!-- '.str_repeat('fixture reader metadata ',30).' --></head><body>'.$body.'</body></html>';
+    }
     return ['headers'=>['content-type'=>$mime],'body'=>$body,'response'=>['code'=>200,'message'=>'OK'],'cookies'=>[]];
 }, 100, 3);
 $originals=get_posts(['post_type'=>'mbi_manga','name'=>'existing-ci-preserved','fields'=>'ids']);
